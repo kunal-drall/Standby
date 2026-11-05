@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  navOracleAbi,
   bidBookAbi,
   restrictedAssetAbi,
   standbyMarketAbi,
@@ -38,6 +39,7 @@ export const addr = {
   asset: need('VITE_ASSET_ADDRESS') as Address,
   bidBook: need('VITE_BIDBOOK_ADDRESS') as Address,
   market: need('VITE_MARKET_ADDRESS') as Address,
+  oracle: need('VITE_ORACLE_ADDRESS') as Address,
 };
 export const party = {
   issuer: privateKeyToAccount(need('VITE_ISSUER_PK') as Hex).address,
@@ -60,6 +62,9 @@ export const getLoan = (id: bigint) =>
 export const bidCount = () => client.readContract({ address: addr.bidBook, abi: bidBookAbi, functionName: 'bidCount' });
 export const getBid = (id: bigint) =>
   client.readContract({ address: addr.bidBook, abi: bidBookAbi, functionName: 'getBid', args: [id] });
+export const latestNav = () => client.readContract({ address: addr.oracle, abi: navOracleAbi, functionName: 'latest' });
+export const previewLimits = (collateral: bigint) =>
+  client.readContract({ address: addr.market, abi: standbyMarketAbi, functionName: 'previewLimits', args: [collateral] });
 export const marketCash = () => client.readContract({ address: addr.market, abi: standbyMarketAbi, functionName: 'cash' });
 export const sharesOf = (who: Address) =>
   client.readContract({ address: addr.market, abi: standbyMarketAbi, functionName: 'sharesOf', args: [who] });
