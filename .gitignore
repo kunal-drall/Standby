@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local assistant tooling (kept out of the repo)
+CLAUDE.md
+.claude/
+BUILD_PROMPT.md
+
+# Foundry
+contracts/broadcast/*/1874/run-*.json
+contracts/broadcast/*/31337/
+contracts/cache/
+contracts/out/
+
+# Node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+
+# Docs site
+site/.docusaurus/
+
+# Playwright
+web/test-results/
+web/playwright-report/
+
+# Misc
+.DS_Store
+.vercel/
+*.log
