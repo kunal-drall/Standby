@@ -1,0 +1,22 @@
+/* Minimal scaffold styles. C7 replaces these with design tokens in tokens.css (light and dark). */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; }
+.shell { min-height: 100vh; display: flex; flex-direction: column; }
+.header, .footer { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; padding: 12px 16px; }
+.header { border-bottom: 1px solid #8884; }
+.footer { border-top: 1px solid #8884; margin-top: auto; font-size: 0.875rem; }
+.brand { font-weight: 700; text-decoration: none; }
+.nav { display: flex; flex-wrap: wrap; gap: 4px 12px; flex: 1; }
+.nav a, .footer a { text-decoration: none; opacity: 0.75; }
+.nav a.active, .footer a.active { opacity: 1; text-decoration: underline; }
+.status { display: flex; gap: 8px; align-items: center; }
+.chip { font-size: 0.75rem; padding: 2px 8px; border: 1px solid #8886; border-radius: 999px; }
+.main { padding: 16px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.muted { opacity: 0.6; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
