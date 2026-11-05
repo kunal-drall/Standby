@@ -42,7 +42,7 @@ In symbols: `D <= min(LTVmax * NAV * q, (1 - h) * Cfree(M))`, where D is the deb
 
 **`openLoan` requires:** a fresh NAV (`StaleNav`), the asset not paused (`AssetPaused`), `principal <= priceLimit` (`AboveLtv`), capacity reserved (`InsufficientCapacity`), and idle USDT of at least the principal (`InsufficientCash`).
 
-**Settleable.** The loan is `Open` and either `now > maturity + grace`, or, with a fresh NAV, `dueAt(now) * 1e4 > value * liqThresholdBps`.
+**Settleable.** The loan is `Open`, the NAV is fresh (fills are priced from it, so a stale NAV waits for the issuer's next post), and either `now > maturity + grace` or `dueAt(now) * 1e4 > value * liqThresholdBps`. `repay` and `settle` revert `AssetPaused` while the asset is paused.
 
 **Settlement.** `remaining = dueAt(now)`. For each reservation, in stored order (lowest discount first):
 
@@ -53,7 +53,7 @@ shares = ceil( take * 1e18 / price )
 if shares > collateral left:  shares = collateral left;  take = shares * price / 1e18
 ```
 
-The bid is filled for `take`, the buyer receives `shares`, and the unused part of the reservation is released. After the loop, `Shortfall` is emitted if `remaining > 0`, and leftover collateral returns to the borrower. A reserved bid whose buyer is no longer allowlisted is skipped and its whole reservation is released.
+The bid is filled for `take`, the buyer receives `shares`, and the unused part of the reservation is released. After the loop, `Shortfall` is emitted if `remaining > 0`, and leftover collateral returns to the borrower. Every reservation is filled, including one whose buyer has since lost the allowlist. Shares owed to an account that is off the allowlist at that moment are held in the market as a claim (`claimableShares`) instead of being sent. New loans count only bids whose buyer holds `BUYER`.
 
 **Repayment.** The borrower pays `dueAt(now)` plus commitment fees:
 
@@ -61,7 +61,7 @@ The bid is filled for `take`, the buyer receives `shares`, and the unused part o
 fee_i = reserved_i * commitFeeBps * elapsed / (1e4 * 365 days)
 ```
 
-Each fee goes to that bid's buyer.
+Each fee goes to that bid's buyer. If the USDT transfer to a buyer fails, the fee is held as `claimableFees` so one buyer cannot block repayment.
 
 ## Worked example
 
@@ -171,7 +171,7 @@ Buyer 1's bid is fully used and closes.
 
 ### The early trigger
 
-With a fresh NAV, the loan is also settleable when `dueAt(now) * 1e4 > value * 9000`. For this loan that is a debt above 90% of the collateral value. At a debt of about 867.002 USDT, this happens when the value of 1,000 shares falls below about 963.34 USDT, a NAV below about 0.9633 USDT.
+With a fresh NAV (needed for both triggers), the loan is also settleable when `dueAt(now) * 1e4 > value * 9000`. For this loan that is a debt above 90% of the collateral value. At a debt of about 867.002 USDT, this happens when the value of 1,000 shares falls below about 963.34 USDT, a NAV below about 0.9633 USDT.
 
 ## Why the haircut
 

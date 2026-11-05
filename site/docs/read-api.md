@@ -13,7 +13,7 @@ All amounts are decimal strings in token base units. Each response has the USDT 
 
 | Method and path | Response |
 | --- | --- |
-| `GET /api/health` | `{ok, block, navAgeSeconds}` |
+| `GET /api/health` | `{ok, block, navAgeSeconds, keeper}` |
 | `GET /api/capacity` | `{decimals, committed, reserved, free, freeUntil, unlocking: [{bidId, amount, unlocksAt}], navs: {nav, updatedAt}}` |
 | `GET /api/bids` | `{decimals, bids: [{bidId, buyer, amount, reserved, discountBps, notice, exitAt, closed}]}` |
 | `GET /api/loans` | `{decimals, loans: [{loanId, borrower, collateral, principal, due, maturity, state, settleable}]}` |
@@ -58,6 +58,8 @@ type Events = { decimals: number; fromBlock: string; toBlock: string; events: Ev
 ## Notes
 
 - `navAgeSeconds` is `null` before the first NAV post.
+- `keeper` is `{pending: [{loanId, txHash}], backingOff: [{loanId, retryAt, reason}]}`, or `null` when the keeper's settler is not running (no `KEEPER_PK`).
+- Responses are cached for about 2 seconds, and the API uses its own RPC client so API traffic cannot starve the keeper.
 - `free` is `freeCapacity(freeUntil)`, where `freeUntil = now + loanTerm + grace`. It is the capacity a loan opened now can use. `committed` and `reserved` sum the open bids.
 - `unlocking` lists bids in exit with their unreserved amount and the time each unlocks, earliest first.
 - `state` in `/api/loans` is the loan state name (`None`, `Open`, `Repaid`, `Settled`). `settleable` is the result of `isSettleable`.

@@ -31,7 +31,7 @@ The asset and the USDT move in one transaction only if both live on the same cha
 
 ## Can the shares go to someone who is not allowlisted?
 
-No. The asset contract checks both sides of every transfer. Buyers must hold the buyer role to post a bid, and settlement skips a buyer who has since lost it.
+No. The asset contract checks both sides of every transfer. Buyers must hold the buyer role to post a bid, and shares owed to an account that has since left the allowlist are held in the market as a claim until it is allowed again.
 
 ## What if nobody settles a defaulted loan?
 

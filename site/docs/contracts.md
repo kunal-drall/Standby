@@ -5,7 +5,7 @@ title: Contracts reference
 
 # Contracts reference
 
-Solidity ^0.8.24, OpenZeppelin 5, custom errors, no upgradeability, no admin withdraw. Signatures are from `docs/interfaces.md` v1.1 and the sources in `contracts/src/`.
+Solidity ^0.8.24, OpenZeppelin 5, custom errors, no upgradeability, no admin withdraw. Signatures are from `docs/interfaces.md` v1.2 and the sources in `contracts/src/`.
 
 There are five contracts. Addresses are on the [Deployments](./deployments.mdx) page.
 
@@ -100,6 +100,11 @@ function fill(uint256 bidId, uint256 usdtAmount, address to) external;
 function getBid(uint256 bidId) external view returns (Bid memory);
 function bidCount() external view returns (uint256);
 function openBidIds() external view returns (uint256[] memory);
+function openBidsOf(address buyer) external view returns (uint256);
+function evict(uint256 bidId) external;
+function MAX_OPEN_BIDS() external view returns (uint256);        // 32
+function MAX_BIDS_PER_BUYER() external view returns (uint256);   // 4
+function MAX_NOTICE() external view returns (uint40);            // 30 days
 function market() external view returns (address);
 function usdt() external view returns (address);
 function registry() external view returns (address);
@@ -110,14 +115,15 @@ function minNotice() external view returns (uint40);
 | Function | Who may call | Notes |
 | --- | --- | --- |
 | `setMarket` | The deployer, once | Reverts `MarketAlreadySet` after that |
-| `postBid` | An account with `BUYER` | Pulls USDT. `discountBps <= maxDiscountBps`, `notice >= minNotice`, at most 32 open bids |
+| `postBid` | An account with `BUYER` | Pulls USDT. `discountBps <= maxDiscountBps`, `minNotice <= notice <= MAX_NOTICE` (30 days), at most `MAX_BIDS_PER_BUYER` (4) open bids per buyer and `MAX_OPEN_BIDS` (32) in total |
 | `requestExit` | Bid owner | Sets `exitAt = now + notice` |
 | `withdraw` | Bid owner | Needs `exitAt != 0`, `now >= exitAt`, and `amount <= amount - reserved` |
 | `freeCapacity` | Anyone (view) | Sum of `amount - reserved` over open bids with `exitAt == 0` or `exitAt > until`, whose buyer still holds `BUYER` |
+| `evict` | Anyone | Refunds the unreserved USDT of a bid whose buyer lost `BUYER`, and frees its slot. The reserved part stays. Reverts `StillBuyer` if the buyer still has the role |
 | `reserve` | Market only | Lowest discount first. Reverts `InsufficientCapacity` |
 | `release` | Market only | Returns reserved USDT to the bid's free balance |
 | `fill` | Market only | `reserved -= x; amount -= x`; sends USDT to `to` |
-| `getBid`, `bidCount`, `openBidIds` | Anyone (view) | `openBidIds` is lowest discount first, ties by id |
+| `getBid`, `bidCount`, `openBidIds`, `openBidsOf` | Anyone (view) | `openBidIds` is lowest discount first, ties by id. `openBidsOf` counts a buyer's open bids |
 
 A bid closes when its `amount` reaches 0. A closed bid leaves `openBidIds`. Reserved USDT is never withdrawable.
 
@@ -131,9 +137,10 @@ event BidWithdrawn(uint256 indexed bidId, uint256 amount);
 event Reserved(uint256 indexed bidId, uint256 indexed loanId, uint256 amount);
 event Released(uint256 indexed bidId, uint256 amount);
 event Filled(uint256 indexed bidId, uint256 usdtAmount);
+event Evicted(uint256 indexed bidId, uint256 refunded);
 ```
 
-**Errors:** `NotBuyer`, `NotBidOwner`, `NotMarket`, `NotDeployer`, `MarketAlreadySet`, `ZeroAddress`, `ZeroAmount`, `UnknownBid`, `BidClosed`, `ExitAlreadyRequested`, `ExitNotRequested`, `NoticeNotOver`, `ExceedsUnreserved`, `ExceedsReserved`, `DiscountTooHigh`, `NoticeTooShort`, `TooManyBids`, `InsufficientCapacity`
+**Errors:** `NotBuyer`, `NotBidOwner`, `NotMarket`, `NotDeployer`, `MarketAlreadySet`, `ZeroAddress`, `ZeroAmount`, `UnknownBid`, `BidClosed`, `ExitAlreadyRequested`, `ExitNotRequested`, `NoticeNotOver`, `ExceedsUnreserved`, `ExceedsReserved`, `DiscountTooHigh`, `NoticeTooShort`, `NoticeTooLong`, `TooManyBids`, `InsufficientCapacity`, `StillBuyer`
 
 ## StandbyMarket
 
@@ -165,6 +172,10 @@ function repay(uint256 loanId) external;
 function isSettleable(uint256 loanId) external view returns (bool);
 function settle(uint256 loanId) external;
 function getLoan(uint256 loanId) external view returns (Loan memory, uint256[] memory bidIds, uint256[] memory reserved);
+function claimableShares(address account) external view returns (uint256);
+function claimableFees(address buyer) external view returns (uint256);
+function claimShares() external;
+function claimFees() external;
 function loanCount() external view returns (uint256);
 function params() external view returns (Params memory);
 
@@ -183,9 +194,12 @@ function bidBook() external view returns (address);
 | `openLoan` | Any allowlisted holder | Needs fresh NAV, unpaused asset, `principal <= priceLimit`, capacity, idle cash. Pulls collateral, sends USDT |
 | `due` | Anyone (view) | Principal plus simple interest to now; 0 unless the loan is open |
 | `quoteRepay` | Anyone (view) | `repay` pulls `dueNow + fees` |
-| `repay` | The loan's borrower | At any time while the loan is open, including after maturity plus grace, until someone settles it |
-| `isSettleable` | Anyone (view) | Open and (past maturity plus grace, or debt above the liquidation threshold at a fresh NAV) |
-| `settle` | Anyone | Reverts `NotSettleable` if not settleable |
+| `repay` | The loan's borrower | At any time while the loan is open, including after maturity plus grace, until someone settles it. Reverts `AssetPaused` while the asset is paused. Commitment fees go to buyers; a fee the token refuses is held as `claimableFees`. Collateral owed to a borrower who is off the allowlist is held as `claimableShares` |
+| `isSettleable` | Anyone (view) | Open, NAV fresh (for both triggers), and either past maturity plus grace or debt above the liquidation threshold |
+| `settle` | Anyone | Reverts `NotSettleable` if not settleable and `AssetPaused` while the asset is paused. Fills every reservation; shares owed to an account off the allowlist are held as `claimableShares` |
+| `claimShares` | Anyone with held shares | Sends the caller's `claimableShares`. Reverts `NotAllowed` (from the asset) while the caller is off the allowlist, `ZeroAmount` if nothing is held |
+| `claimFees` | Anyone with held fees | Sends the caller's `claimableFees` in USDT. Reverts `ZeroAmount` if nothing is held |
+| `claimableShares`, `claimableFees` | Anyone (view) | Amounts held for an account |
 | `getLoan` | Anyone (view) | Loan plus its reserved bid ids and amounts |
 
 **Events**
@@ -197,6 +211,10 @@ event LoanOpened(uint256 indexed loanId, address indexed borrower, uint256 colla
 event LoanRepaid(uint256 indexed loanId, uint256 paid, uint256 commitmentFees);
 event LoanSettled(uint256 indexed loanId, uint256 recovered, uint256 collateralToBuyers, uint256 collateralReturned);
 event Shortfall(uint256 indexed loanId, uint256 amount);
+event SharesHeld(address indexed account, uint256 shares);
+event SharesClaimed(address indexed account, uint256 shares);
+event FeeHeld(address indexed buyer, uint256 amount);
+event FeesClaimed(address indexed buyer, uint256 amount);
 ```
 
 **Errors:** `ZeroAddress`, `BadConfig`, `BadParams`, `ZeroAmount`, `ZeroShares`, `InsufficientShares`, `AssetPaused`, `StaleNav`, `AboveLtv`, `InsufficientCash`, `UnknownLoan`, `LoanNotOpen`, `NotBorrower`, `NotSettleable`. Capacity failures surface as the bid book's `InsufficientCapacity`.

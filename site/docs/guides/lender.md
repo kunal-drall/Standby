@@ -25,7 +25,8 @@ A lender deposits USDT in the pool and earns interest on loans whose collateral 
 
 - **`InsufficientCash`.** `withdraw` reverts if the pool does not hold enough idle USDT. Part of the pool is lent out until loans close.
 - **Shortfall.** If the reserved bids cannot cover the debt at settlement, the market emits `Shortfall(loanId, amount)` and the pool bears the loss. The haircut is there to make this unlikely, but it is not impossible.
-- **Paused asset.** An issuer pause blocks settlement until unpaused.
+- **Paused asset.** An issuer pause blocks repayment and settlement until unpaused.
+- **Stale NAV.** Settlement needs a fresh NAV, so a default waits for the issuer's next post.
 
 ## Why it is safer
 

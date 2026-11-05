@@ -29,7 +29,9 @@ A borrower is an allowlisted holder of the fund shares who wants cash without se
 | `InsufficientCapacity` | The bids cannot cover the reservation you need |
 | `InsufficientCash` | The pool does not hold enough idle USDT |
 | `StaleNav` | The latest NAV is older than the limit |
-| `AssetPaused` | The issuer paused the asset |
+| `AssetPaused` | The issuer paused the asset (also blocks `repay`) |
 | `NotBorrower` | Someone other than the borrower called `repay` |
 
 If you do not repay in time, anyone can settle the loan. Buyers receive shares at their own price until the debt is covered. You get back any leftover shares. You can still repay after maturity plus grace until someone settles the loan.
+
+If you are off the allowlist when the collateral is returned, in `repay` or in `settle`, the shares are held in the market as a claim. Once the issuer allows you again, call `claimShares()` (see `claimableShares`).

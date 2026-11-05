@@ -32,7 +32,7 @@ Every reserved dollar belongs to exactly one loan. The formulas and a worked exa
 3. **Open.** The borrower pledges shares. The market checks the NAV is fresh, checks the price limit, reserves bids, takes the shares and sends USDT.
 4. **Close, one of two ways.**
    - **Repay.** The borrower pays principal and interest (and the commitment fee) in one transaction and gets the shares back. Reservations are released.
-   - **Settle.** After maturity plus grace, or earlier if the debt passes the liquidation threshold, anyone calls `settle`. Each reserved bid pays USDT to the pool and receives shares at its own price. Unused reservations are released and leftover shares go back to the borrower.
+   - **Settle.** After maturity plus grace, or earlier if the debt passes the liquidation threshold, anyone calls `settle`. Each reserved bid pays USDT to the pool and receives shares at its own price. Unused reservations are released and leftover shares go back to the borrower. Shares owed to a wallet that is off the allowlist at that moment are held in the market as a claim.
 
 Delivery and payment happen in the same transaction, on the same chain. The asset contract refuses any transfer to a wallet that is not on the allowlist, so shares can only reach allowlisted buyers.
 
@@ -40,7 +40,7 @@ Delivery and payment happen in the same transaction, on the same chain. The asse
 
 A loan starts `Open`. It ends as `Repaid` or `Settled`.
 
-A loan is settleable when the time passes maturity plus grace, or when the debt exceeds the liquidation threshold of the collateral value at a fresh NAV.
+A loan is settleable when the NAV is fresh and either the time has passed maturity plus grace or the debt exceeds the liquidation threshold of the collateral value. A stale NAV delays settlement until the issuer posts again.
 
 ## Demo parameters
 
