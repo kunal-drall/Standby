@@ -93,7 +93,7 @@ export function Capacity() {
                   <Kpi label="Reserved" tone="accent">
                     <Amount value={t.reserved} tip={`Σ reserved of open bids = ${sumTerms(t.open.map((b) => f.u(b.reserved)))}\nbacking ${openLoans(snap).length} open loan(s)`} />
                   </Kpi>
-                  <Kpi label="Free for a loan now" tone="positive">
+                  <Kpi label="Free for a loan now" tone="info">
                     <Amount
                       value={t.free}
                       tip={`BidBook.freeCapacity(now + loanTerm + grace)\n= freeCapacity(${formatTime(snap.freeUntil)}) at block ${snap.blockNumber}\nnow + ${formatDuration(snap.params.loanTerm)} + ${formatDuration(snap.params.grace)}`}
@@ -121,7 +121,7 @@ export function Capacity() {
                       label={`Committed ${f.u(t.committed)} ${f.sym}: reserved ${f.u(t.reserved)}, free ${f.u(t.free)}, unavailable ${f.u(t.unavailable)}`}
                       segments={[
                         { key: 'res', label: 'Reserved', value: t.reserved, tone: 'accent', tip: 'Σ reserved of open bids' },
-                        { key: 'free', label: 'Free now', value: t.free, tone: 'positive', tip: 'freeCapacity(now + loanTerm + grace)' },
+                        { key: 'free', label: 'Free now', value: t.free, tone: 'info', tip: 'freeCapacity(now + loanTerm + grace)' },
                         { key: 'na', label: 'Unavailable', value: t.unavailable, tone: 'muted', tip: 'committed − reserved − free' },
                       ]}
                     />

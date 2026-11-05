@@ -56,8 +56,10 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
       // of interest and fees, whichever is larger.
       const tenMin = interestFor(loan.principal, snap.params.rateBps, 600) + loan.reserved.reduce((s, r) => s + feeFor(r, snap.params.commitFeeBps, 600), 0n);
       const buffer = owed / 200n > tenMin ? owed / 200n : tenMin;
+      const call = { label: `Repay loan #${loan.id}`, address: c.market, abi: standbyMarketAbi, functionName: 'repay', args: [loan.id] } as const;
+      await send.preflight(call);
       await send.ensureAllowance({ token: c.usdt, spender: c.market, amount: owed + buffer, label: 'Approve USDT for the market' });
-      const receipt = await send.write({ label: `Repay loan #${loan.id}`, address: c.market, abi: standbyMarketAbi, functionName: 'repay', args: [loan.id] });
+      const receipt = await send.write(call);
       const ev = parseEventLogs({ abi: standbyMarketAbi, logs: receipt.logs, eventName: 'LoanRepaid' })[0];
       return ev
         ? `Loan #${loan.id} repaid: ${f.usdt(ev.args.paid)} to the pool and ${f.usdt(ev.args.commitmentFees)} commitment fees to buyers. Collateral returned.`
@@ -91,13 +93,10 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
           <thead>
             <tr>
               <th scope="col">Loan</th>
-              {mode === 'pool' && <th scope="col">Borrower</th>}
               <th scope="col" className="num-col">Collateral</th>
               <th scope="col" className="num-col">Principal</th>
-              <th scope="col" className="num-col">Due now</th>
-              <th scope="col" className="num-col">Fees</th>
-              <th scope="col">Maturity</th>
-              <th scope="col">Grace ends</th>
+              <th scope="col" className="num-col">Due now · fees</th>
+              <th scope="col">Maturity · grace ends</th>
               <th scope="col">State</th>
               <th scope="col">
                 <span className="sr-only">Actions</span>
@@ -111,12 +110,14 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
               const graceEnd = loan.maturity + snap.params.grace;
               return (
                 <tr key={loan.id.toString()}>
-                  <th scope="row">Loan #{loan.id.toString()}</th>
-                  {mode === 'pool' && (
-                    <td>
-                      <AddressCell address={loan.borrower} />
-                    </td>
-                  )}
+                  <th scope="row">
+                    Loan #{loan.id.toString()}
+                    {mode === 'pool' && (
+                      <span className="cell-sub">
+                        <AddressCell address={loan.borrower} />
+                      </span>
+                    )}
+                  </th>
                   <td className="num-col">
                     <Amount kind="shares" value={loan.collateral} tip="Loan.collateral: shares pledged to the market" />
                   </td>
@@ -125,20 +126,20 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
                   </td>
                   <td className="num-col">
                     {open ? (
-                      <Amount
-                        value={live.due}
-                        tip={`dueAt(now) = principal + principal × rate × elapsed / 365 days\n= ${f.u(loan.principal)} + ${f.u(loan.principal)} × ${pct(snap.params.rateBps)} × ${live.elapsed} s / 365 days\ndue(${loan.id}) at block ${snap.blockNumber} = ${f.u(loan.due)}`}
-                      />
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="num-col">
-                    {open ? (
-                      <Amount
-                        value={live.fees}
-                        tip={`Commitment fees to buyers = Σ reserved × ${pct(snap.params.commitFeeBps)} × elapsed / 365 days\nreserved = ${loan.reserved.map((r) => f.u(r)).join(' + ') || '0'}\nquoteRepay(${loan.id}).fees at block ${snap.blockNumber} = ${f.u(loan.fees)}`}
-                      />
+                      <>
+                        <Amount
+                          value={live.due}
+                          tip={`dueAt(now) = principal + principal × rate × elapsed / 365 days\n= ${f.u(loan.principal)} + ${f.u(loan.principal)} × ${pct(snap.params.rateBps)} × ${live.elapsed} s / 365 days\ndue(${loan.id}) at block ${snap.blockNumber} = ${f.u(loan.due)}`}
+                        />
+                        <span className="cell-sub">
+                          +{' '}
+                          <Amount
+                            value={live.fees}
+                            tip={`Commitment fees to buyers = Σ reserved × ${pct(snap.params.commitFeeBps)} × elapsed / 365 days\nreserved = ${loan.reserved.map((r) => f.u(r)).join(' + ') || '0'}\nquoteRepay(${loan.id}).fees at block ${snap.blockNumber} = ${f.u(loan.fees)}`}
+                          />{' '}
+                          fees
+                        </span>
+                      </>
                     ) : (
                       <span className="muted">—</span>
                     )}
@@ -147,11 +148,12 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
                     <Num tip={`Loan.maturity = openedAt + loanTerm = ${formatTime(loan.openedAt)} + ${formatDuration(snap.params.loanTerm)}`}>
                       {open ? relative(loan.maturity, now) : formatTime(loan.maturity)}
                     </Num>
-                  </td>
-                  <td>
-                    <Num tip={`maturity + grace (${formatDuration(snap.params.grace)}) = ${formatTime(graceEnd)}. After this anyone can settle (with a fresh NAV).`}>
-                      {open ? relative(graceEnd, now) : formatTime(graceEnd)}
-                    </Num>
+                    <span className="cell-sub">
+                      grace{' '}
+                      <Num tip={`maturity + grace (${formatDuration(snap.params.grace)}) = ${formatTime(graceEnd)}. After this anyone can settle (with a fresh NAV).`}>
+                        {open ? relative(graceEnd, now) : formatTime(graceEnd)}
+                      </Num>
+                    </span>
                   </td>
                   <td>
                     <Num

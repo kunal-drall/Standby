@@ -91,7 +91,7 @@ function LiveStats() {
             tip={`Σ reserved over open bids\n= ${sumTerms(t.open.map((b) => f.u(b.reserved)))}\nReserved USDT is never withdrawable.`}
           />
         </Kpi>
-        <Kpi label="Free for a loan now" tone="positive">
+        <Kpi label="Free for a loan now" tone="info">
           <Amount
             value={t.free}
             tip={`BidBook.freeCapacity(now + loanTerm + grace)\n= freeCapacity(${formatTime(snap.freeUntil)})\nUnreserved USDT in bids still locked when a loan opened now would end (${formatDuration(snap.params.loanTerm)} + ${formatDuration(snap.params.grace)} grace).`}
@@ -116,7 +116,7 @@ function LiveStats() {
           label="Bid USDT: reserved, free for a new loan, and unavailable"
           segments={[
             { key: 'res', label: 'Reserved', value: t.reserved, tone: 'accent', tip: 'Σ reserved over open bids' },
-            { key: 'free', label: 'Free now', value: t.free, tone: 'positive', tip: 'freeCapacity(now + loanTerm + grace)' },
+            { key: 'free', label: 'Free now', value: t.free, tone: 'info', tip: 'freeCapacity(now + loanTerm + grace)' },
             {
               key: 'na',
               label: 'In exit or buyer removed',

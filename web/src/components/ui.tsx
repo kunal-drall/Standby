@@ -53,7 +53,7 @@ export function Amount({ value, tip, kind = 'usdt', className }: AmountProps) {
         </>
       }
     >
-      {shown} <span className="unit">{unit}</span>
+      <span className="digits">{shown}</span> <span className="unit">{unit}</span>
     </Tip>
   );
 }
@@ -76,7 +76,7 @@ export function Kpi({
   label: string;
   children: ReactNode;
   sub?: ReactNode;
-  tone?: 'positive' | 'warning' | 'negative' | 'accent';
+  tone?: 'positive' | 'warning' | 'negative' | 'accent' | 'info';
 }) {
   return (
     <div className={cx('kpi', tone && `kpi-${tone}`)}>
@@ -297,7 +297,7 @@ export function StackBar({
   segments,
   label,
 }: {
-  segments: { key: string; label: string; value: bigint; tone: 'accent' | 'positive' | 'muted' | 'warning'; tip: ReactNode }[];
+  segments: { key: string; label: string; value: bigint; tone: 'accent' | 'info' | 'muted' | 'warning'; tip: ReactNode }[];
   label: string;
 }) {
   const total = segments.reduce((s, x) => s + x.value, 0n);
@@ -344,7 +344,7 @@ export function MiniBar({ reserved, total, label }: { reserved: bigint; total: b
       {total === 0n && <rect x="0" y="0" width="100" height="8" rx="3" className="seg-track" />}
       {ratio > 0 && <rect x="0" y="0" width={Math.max(r - gap / 2, 1.5)} height="8" rx="2" className="seg-accent" />}
       {ratio < 1 && total > 0n && (
-        <rect x={r + gap / 2} y="0" width={Math.max(100 - r - gap / 2, 1.5)} height="8" rx="2" className="seg-positive" />
+        <rect x={r + gap / 2} y="0" width={Math.max(100 - r - gap / 2, 1.5)} height="8" rx="2" className="seg-info" />
       )}
     </svg>
   );

@@ -449,7 +449,7 @@ function TryTransferCard() {
 }
 
 function AllowlistTable({ onEdit }: { onEdit: (address: Address, roles: number) => void }) {
-  const { effectiveRpcUrl, wallets } = useSettings();
+  const { effectiveRpcUrl, wallets, labelOf } = useSettings();
   const { snap } = useData();
   const logs = useLogs(effectiveRpcUrl);
 
@@ -521,7 +521,7 @@ function AllowlistTable({ onEdit }: { onEdit: (address: Address, roles: number) 
             <tbody>
               {entries.map((e) => {
                 const r = roles.data?.get(e.address.toLowerCase()) ?? 0;
-                const label = contractLabel(e.address);
+                const label = contractLabel(e.address) ?? labelOf(e.address);
                 return (
                   <tr key={e.address}>
                     <td>

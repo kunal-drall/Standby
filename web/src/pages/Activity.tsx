@@ -57,9 +57,9 @@ function useDescribe(): Describe {
       case 'Filled':
         return `Bid #${String(a.bidId)} paid ${usdt(a.usdtAmount)} for defaulted collateral`;
       case 'Deposited':
-        return `${who(a.lender)} deposited ${usdt(a.assets)} for ${formatInt(a.shares as bigint)} pool share units`;
+        return `${who(a.lender)} deposited ${usdt(a.assets)} for ${snap ? f.u(a.shares as bigint) : String(a.shares)} pool shares`;
       case 'Withdrawn':
-        return `${who(a.lender)} withdrew ${usdt(a.assets)}`;
+        return `${who(a.lender)} redeemed ${snap ? f.u(a.shares as bigint) : String(a.shares)} pool shares for ${usdt(a.assets)}`;
       case 'LoanOpened':
         return `${who(a.borrower)} opened loan #${String(a.loanId)}: ${usdt(a.principal)} against ${shares(a.collateral)}, matures ${formatTime(Number(a.maturity))}`;
       case 'LoanRepaid':

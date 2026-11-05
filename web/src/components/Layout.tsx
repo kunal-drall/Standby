@@ -122,6 +122,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    const nav = document.querySelector<HTMLElement>('.nav');
+    const link = nav?.querySelector<HTMLElement>('a.active');
+    if (nav && link) nav.scrollLeft = link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2;
   }, [location.pathname]);
 
   return (

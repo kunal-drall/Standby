@@ -159,10 +159,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [chainNow]);
 
   const stale = snap !== null && (snap.rpcUrl !== rpcUrl || (snap.party?.address ?? null) !== partyAddress);
+  // While a wallet switch reloads, never show the previous wallet's balances.
+  const shown = useMemo(
+    () => (snap && (snap.party?.address ?? null) !== partyAddress ? { ...snap, party: null } : snap),
+    [snap, partyAddress],
+  );
 
   const value = useMemo<DataValue>(
-    () => ({ snap, stale, error, loading, refresh, status, chainNow }),
-    [snap, stale, error, loading, refresh, status, chainNow],
+    () => ({ snap: shown, stale, error, loading, refresh, status, chainNow }),
+    [shown, stale, error, loading, refresh, status, chainNow],
   );
 
   return (

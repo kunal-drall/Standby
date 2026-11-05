@@ -237,14 +237,10 @@ function OpenLoanCard() {
           const col = collateral;
           const pr = principal;
           void tx.run('Open loan', async (send) => {
+            const call = { label: 'Open loan', address: c.market, abi: standbyMarketAbi, functionName: 'openLoan', args: [col, pr] } as const;
+            await send.preflight(call);
             await send.ensureAllowance({ token: c.asset, spender: c.market, amount: col, label: 'Approve shares for the market' });
-            const receipt = await send.write({
-              label: 'Open loan',
-              address: c.market,
-              abi: standbyMarketAbi,
-              functionName: 'openLoan',
-              args: [col, pr],
-            });
+            const receipt = await send.write(call);
             const ev = parseEventLogs({ abi: standbyMarketAbi, logs: receipt.logs, eventName: 'LoanOpened' })[0];
             setBorrowText(null);
             setPledgeText(null);

@@ -6,7 +6,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 "$ROOT/scripts/local-chain.sh" --fresh
 pnpm -C "$ROOT/packages/shared" build >/dev/null
 pnpm -C "$ROOT/keeper" build >/dev/null
+# Stop any keeper from an earlier run: it would hold the port and remember loans from another chain.
 [[ -f "$ROOT/.local/keeper.pid" ]] && kill "$(cat "$ROOT/.local/keeper.pid")" 2>/dev/null || true
+pkill -f "$ROOT/keeper/dist/index.js" 2>/dev/null || true
+sleep 1
 (
   set -a
   # shellcheck disable=SC1091

@@ -52,9 +52,17 @@ export type Sender = {
   account: Address;
   /** Simulates, sends, waits for the receipt; throws a decodable error on revert. */
   write: (call: WriteCall) => Promise<TransactionReceipt>;
+  /**
+   * Simulates the main call before any approval; stops with its error unless the failure is one an
+   * approval can fix, so a doomed call never costs an approval transaction.
+   */
+  preflight: (call: WriteCall) => Promise<void>;
   /** Approves `spender` for at least `amount` of `token`, skipping it when the allowance suffices. */
   ensureAllowance: (p: { token: Address; spender: Address; amount: bigint; label: string }) => Promise<void>;
 };
+
+/** Failures that may only mean "not approved yet" (OpenZeppelin errors or a token's string reason). */
+const MAYBE_ALLOWANCE = new Set(['ERC20InsufficientAllowance', 'SafeERC20FailedOperation', 'Reverted', 'Failed', 'Panic', 'RpcUnreachable']);
 
 type Scope = { activeId: string | null; busy: boolean; claim: (id: string) => void; setBusy: (b: boolean) => void };
 const TxScope = createContext<Scope | null>(null);
@@ -135,6 +143,22 @@ export function useTx() {
         }
       };
 
+      const preflight: Sender['preflight'] = async (call) => {
+        try {
+          await pub.simulateContract({
+            account: active.address,
+            address: call.address,
+            abi: [...(call.abi as Abi), ...ERROR_ABI] as Abi,
+            functionName: call.functionName,
+            args: call.args ?? [],
+          });
+        } catch (e) {
+          if (MAYBE_ALLOWANCE.has(decodeError(e).name)) return;
+          steps.push({ label: call.label, status: 'failed', approval: false });
+          throw e;
+        }
+      };
+
       const ensureAllowance: Sender['ensureAllowance'] = async ({ token, spender, amount, label }) => {
         const current = await pub.readContract({
           address: token,
@@ -157,7 +181,7 @@ export function useTx() {
       };
 
       try {
-        const summary = await fn({ account: active.address, write, ensureAllowance });
+        const summary = await fn({ account: active.address, write, preflight, ensureAllowance });
         await refresh();
         setState({ phase: 'success', title, steps: steps.map((s) => ({ ...s })), summary: summary ?? null });
       } catch (e) {

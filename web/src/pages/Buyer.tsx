@@ -173,8 +173,10 @@ function PostBidCard() {
           const d = bps;
           const n = notice;
           void tx.run('Post bid', async (send) => {
+            const call = { label: 'Post bid', address: c.bidBook, abi: bidBookAbi, functionName: 'postBid', args: [a, d, n] } as const;
+            await send.preflight(call);
             await send.ensureAllowance({ token: c.usdt, spender: c.bidBook, amount: a, label: 'Approve USDT for the bid book' });
-            const receipt = await send.write({ label: 'Post bid', address: c.bidBook, abi: bidBookAbi, functionName: 'postBid', args: [a, d, n] });
+            const receipt = await send.write(call);
             const ev = parseEventLogs({ abi: bidBookAbi, logs: receipt.logs, eventName: 'BidPosted' })[0];
             return ev
               ? `Bid #${ev.args.bidId} posted: ${f.usdt(ev.args.amount)} at ${pct(ev.args.discountBps)} discount, ${formatDuration(ev.args.notice)} notice.`
@@ -248,7 +250,7 @@ function MyBids({ bids }: { bids: BidView[] }) {
                     <MiniBar reserved={bid.reserved} total={bid.amount} label={`Reserved ${f.u(bid.reserved)} of ${f.u(bid.amount)}`} />
                     <span className="bar-legend">
                       <Amount value={bid.reserved} tip="Bid.reserved: backing open loans, never withdrawable" className="text-accent" /> ·{' '}
-                      <Amount value={free} tip={`free = amount − reserved = ${f.u(bid.amount)} − ${f.u(bid.reserved)}`} className="text-positive" />
+                      <Amount value={free} tip={`free = amount − reserved = ${f.u(bid.amount)} − ${f.u(bid.reserved)}`} className="text-info" />
                     </span>
                   </td>
                   <td className="num-col">
@@ -314,7 +316,7 @@ export function Buyer() {
               <Kpi label="Reserved by loans" tone="accent">
                 <Amount value={reserved} tip={`Σ reserved over your open bids = ${open.map((b) => f.u(b.reserved)).join(' + ') || '0'}`} />
               </Kpi>
-              <Kpi label="Free" tone="positive">
+              <Kpi label="Free" tone="info">
                 <Amount value={committed - reserved} tip="committed − reserved: withdrawable after an exit's notice period ends" />
               </Kpi>
               <Kpi label="Wallet USDT">

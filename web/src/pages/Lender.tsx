@@ -100,8 +100,10 @@ function DepositCard() {
         onClick={() => {
           if (amount === null) return;
           void tx.run('Deposit', async (send) => {
+            const call = { label: 'Deposit', address: c.market, abi: standbyMarketAbi, functionName: 'deposit', args: [amount] } as const;
+            await send.preflight(call);
             await send.ensureAllowance({ token: c.usdt, spender: c.market, amount, label: 'Approve USDT for the market' });
-            const receipt = await send.write({ label: 'Deposit', address: c.market, abi: standbyMarketAbi, functionName: 'deposit', args: [amount] });
+            const receipt = await send.write(call);
             const ev = parseEventLogs({ abi: standbyMarketAbi, logs: receipt.logs, eventName: 'Deposited' })[0];
             return ev ? `Deposited ${f.usdt(ev.args.assets)} for ${f.u(ev.args.shares)} pool shares.` : 'Deposited.';
           });
