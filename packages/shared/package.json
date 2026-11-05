@@ -1,0 +1,27 @@
+{
+  "name": "@standby/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chain constants, units helpers, ABIs and deployed addresses shared by keeper and web.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./deployments.json": "./src/deployments.json"
+  },
+  "files": ["dist", "src/deployments.json"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "viem": "2.57.16"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
