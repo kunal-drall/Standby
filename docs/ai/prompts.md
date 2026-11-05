@@ -139,3 +139,7 @@ Check whether official Aqua and SwapVM contracts can be deployed on Whitechain S
 | qa | `web/e2e`, live checks | mid | Playwright against testnet; one visual pass per page; record runs |
 | reviewer | read-only | strongest | Fresh-eyes review for fund-loss and rule-bypass bugs |
 | docs | README, docs site, submission | small | Write only from facts in the repo |
+
+## How the chunks were run (2026-11-06)
+
+C0–C13 were built in one session on branch `claude/zen-ptolemy-90yxwn`. The web app (C7/C8), the docs site (C11) and the independent review (C12) ran as parallel assistant agents, each briefed with the chunk prompt above plus the file paths it needed (spec sections, shared package, E2E hook names); the review agent was given the code and the spec but not the builder's reasoning. Everything else ran in the main session. Decisions taken along the way are in `docs/plan.md` (Decision log).

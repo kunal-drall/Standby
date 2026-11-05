@@ -9,8 +9,8 @@ Living plan. Update it in the same pull request as the work it describes. Newest
 | Phase | Build (ETHGlobal Mumbai, from scratch) |
 | Deadline | Saturday 7 Nov 2026, 09:00 IST (submit by 08:00) |
 | Partner prize | Whitechain, Tokenize track |
-| Current milestone | M0 scaffold: built on branch, waiting for `main` and the first merge |
-| Last updated | 2026-11-06 02:51 IST |
+| Current milestone | Code complete on branch; waiting for funded testnet wallets (M1/M3) and the first merge to `main` |
+| Last updated | 2026-11-06 03:44 IST |
 
 ## Goal
 
@@ -20,15 +20,15 @@ Lenders can lend against a restricted tokenized asset because allowlisted buyers
 
 | ID | By (IST) | Milestone | Owner | Status |
 |---|---|---|---|---|
-| M0 | Fri 03:30 | Repo, docs, interfaces, shared package; first PR merged | Kunal | in review: `pnpm -r build`, `pnpm -r test`, `forge build` pass; merge pending |
-| M1 | Fri 05:00 | Deploy-and-verify spike on Whitechain; USDT decimals read | Solidity dev | started: USDT `decimals()` = 6 read on chain; deploy and verify to do |
-| M2 | Fri 10:00 | Five contracts with tests (all P0) | Solidity dev | todo |
-| M3 | Fri 12:00 | Deployed, verified, seeded; addresses below | Solidity dev | todo |
-| M4 | Fri 16:00 | Web app: party pages on testnet | Swift dev | todo |
-| M5 | Fri 16:00 | Keeper settles a defaulted loan | Kunal | todo |
-| M6 | Fri 20:00 | End to end: one repaid, one defaulted loan; E2E tests green | All | todo |
-| M7 | Fri 23:00 | P1: fees, NAV default, capacity, read API, settings, privacy, docs site | Whoever is free | todo |
-| M8 | Sat 02:00 | Freeze; independent review; README; feedback file | Kunal | todo |
+| M0 | Fri 03:30 | Repo, docs, interfaces, shared package; first PR merged | Kunal | in review: all builds and tests pass; merge to `main` pending |
+| M1 | Fri 05:00 | Deploy-and-verify spike on Whitechain; USDT decimals read | Solidity dev | blocked on funding: USDT `decimals()` = 6 read on chain; `scripts/deploy-testnet.sh` deploys and verifies in one step once wallets hold WBT |
+| M2 | Fri 10:00 | Five contracts with tests (all P0) | Solidity dev | done: 100 Foundry tests (6- and 18-decimal USDT, fuzz, reentrancy) |
+| M3 | Fri 12:00 | Deployed, verified, seeded; addresses below | Solidity dev | ready, blocked on funding: deploy, verify and seed scripts rehearsed on a fork of chain 1874 |
+| M4 | Fri 16:00 | Web app: party pages on testnet | Swift dev | done on the fork: all party pages; 8/8 E2E |
+| M5 | Fri 16:00 | Keeper settles a defaulted loan | Kunal | done on the fork: keeper settled loan 1 (see Demo runs) |
+| M6 | Fri 20:00 | End to end: one repaid, one defaulted loan; E2E tests green | All | done on the fork (both lifecycles, E2E green); testnet run pending |
+| M7 | Fri 23:00 | P1: fees, NAV default, capacity, read API, settings, privacy, docs site | Whoever is free | done: fee, NAV default, capacity, share price, read API, settings/privacy/terms, docs site. 1inch and gasless dropped |
+| M8 | Sat 02:00 | Freeze; independent review; README; feedback file | Kunal | review done and fixed (C12); README and feedback file drafted |
 | M9 | Sat 05:00 | Video | Kunal | todo |
 | M10 | Sat 08:00 | Submitted | Kunal | todo |
 
@@ -36,26 +36,26 @@ Lenders can lend against a restricted tokenized asset because allowlisted buyers
 
 | ID | Requirement | Priority | Status | PR |
 |---|---|---|---|---|
-| R1 | Restricted asset with allowlist | P0 | todo | |
-| R2 | Pause and NAV with staleness | P0 | todo | |
-| R3 | Pool deposit and withdraw | P0 | todo | |
-| R4 | Post bids (notice, discount limits) | P0 | todo | |
-| R5 | Exit after notice, unreserved only | P0 | todo | |
-| R6 | Open loan at the lower limit, reserve cheapest first | P0 | todo | |
-| R7 | Repay: one transaction | P0 | todo | |
-| R8 | Default settlement: one transaction | P0 | todo | |
-| R9 | Keeper | P0 | todo | |
-| R10 | Web app party pages | P0 | started: route placeholders | |
-| R11 | Commitment fee | P1 | todo | |
-| R12 | NAV-based default | P1 | todo | |
-| R13 | Capacity readout | P1 | todo | |
-| R14 | Pool share price from interest | P1 | todo | |
-| R15 | 1inch Aqua quoting (stretch) | P2 | todo | |
-| R16 | Gasless actions (stretch) | P2 | todo | |
-| R17 | Docs site (Docusaurus) | P1 | todo | |
-| R18 | Read API | P1 | started: `GET /api/health` | |
-| R19 | Settings, privacy, terms pages | P1 | todo | |
-| R20 | E2E tests (Playwright) against testnet | P0 | todo | |
+| R1 | Restricted asset with allowlist | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R2 | Pause and NAV with staleness | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R3 | Pool deposit and withdraw | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R4 | Post bids (notice, discount limits) | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R5 | Exit after notice, unreserved only | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R6 | Open loan at the lower limit, reserve cheapest first | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R7 | Repay: one transaction | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R8 | Default settlement: one transaction | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R9 | Keeper | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R10 | Web app party pages | P0 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R11 | Commitment fee | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R12 | NAV-based default | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R13 | Capacity readout | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R14 | Pool share price from interest | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R15 | 1inch Aqua quoting (stretch) | P2 | dropped (see Decision log) | branch `claude/zen-ptolemy-90yxwn` |
+| R16 | Gasless actions (stretch) | P2 | dropped (cut order) | branch `claude/zen-ptolemy-90yxwn` |
+| R17 | Docs site (Docusaurus) | P1 | done; deploy pending | branch `claude/zen-ptolemy-90yxwn` |
+| R18 | Read API | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R19 | Settings, privacy, terms pages | P1 | done | branch `claude/zen-ptolemy-90yxwn` |
+| R20 | E2E tests (Playwright) against testnet | P0 | done on the fork; testnet run pending | branch `claude/zen-ptolemy-90yxwn` |
 
 ## Needs Kunal
 
@@ -112,9 +112,17 @@ Items only a human can do. Work continues around them with placeholders; answer 
 
 | Date | Lifecycle | Key transactions | Notes |
 |---|---|---|---|
+| 2026-11-06 03:40 IST | Both, local fork of chain 1874 (`scripts/e2e-local.sh`) | Loan 0 opened at the price limit and repaid in one transaction; loan 1 settled by the keeper: `0xdaf5ddccd118dbc80fedc220045da37b5f1f57db75e7aa115e60c1382f765bc5` (fork only, not on the public explorer) | 8/8 Playwright tests: NAV post, NotAllowed transfer, bids, deposit, open at lower limit, repay, NoticeNotOver, keeper settlement. Market on the fork `0x5bf5…528A`. Visual pass: 10 pages at 1280 and 375 px, no overflow, no console errors |
 
 ## Changelog
 
 | Date | PR | What changed |
 |---|---|---|
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C12 review fixes (claims for off-allowlist accounts, fill revoked buyers, fresh NAV for settlement, bid caps and eviction, fee fallback, keeper backoff and pending tracking, API cache); interfaces v1.2; docs updated |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C9 E2E (8 tests, both lifecycles) and local runner; visual pass |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C7/C8 web app: design tokens, layout, overview, issuer, lender, buyer, borrower, capacity, activity, settings, privacy, terms |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C11 docs site (Docusaurus 3, Mermaid, shared tokens) |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C6 keeper: settlement loop and read API with anvil integration tests |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C2-C5 contracts with tests; deploy and seed scripts; local fork rehearsal; testnet deploy script; interfaces v1.1 |
+| 2026-11-06 | branch `claude/zen-ptolemy-90yxwn` | C13 drafts: README, WHITECHAIN_FEEDBACK.md, docs/SUBMISSION.md (TODO(kunal) where a value only exists after the testnet deploy) |
 | 2026-11-06 | scaffold (branch `claude/zen-ptolemy-90yxwn`) | C0: specs, plan and PRD export committed; pnpm workspace; `packages/shared` (constants, units, math, spec ABIs, empty deployments); keeper skeleton with `/api/health`; web shell with section 7 routes; Foundry project with five placeholder contracts; site placeholder; CI; README stub with "Before and during the hackathon"; MIT licence |
