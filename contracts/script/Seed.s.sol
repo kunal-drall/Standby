@@ -44,7 +44,9 @@ contract Seed is Script {
         console.log("lender deposit (base units): %s", deposit);
     }
 
-    function _bid(IERC20Metadata usdt, BidBook bidBook, uint256 pk, uint256 wanted, uint16 discountBps) internal {
+    function _bid(IERC20Metadata usdt, BidBook bidBook, uint256 pk, uint256 wanted, uint16 discountBps)
+        internal
+    {
         uint256 amount = _cap(usdt, vm.addr(pk), wanted);
         if (amount == 0) {
             console.log("skipped bid at %s bps: wallet holds no USDT", discountBps);

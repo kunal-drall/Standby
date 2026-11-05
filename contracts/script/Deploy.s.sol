@@ -54,8 +54,9 @@ contract Deploy is Script {
         dep.asset = new RestrictedAsset("Demo T-Bill Fund Share", "dTBILL", address(dep.registry), issuer);
         dep.oracle = new NavOracle(issuer);
         dep.bidBook = new BidBook(usdt, address(dep.registry), MAX_DISCOUNT_BPS, MIN_NOTICE);
-        dep.market =
-            new StandbyMarket(usdt, address(dep.asset), address(dep.oracle), address(dep.bidBook), demoParams());
+        dep.market = new StandbyMarket(
+            usdt, address(dep.asset), address(dep.oracle), address(dep.bidBook), demoParams()
+        );
         dep.bidBook.setMarket(address(dep.market));
         dep.registry.setRoles(address(dep.market), Roles.CONTRACT);
         dep.registry.setRoles(address(dep.bidBook), Roles.CONTRACT);
