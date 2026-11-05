@@ -9,9 +9,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./deployments.json": "./src/deployments.json"
+    "./deployments.json": "./src/deployments.json",
+    "./styles/tokens.css": "./styles/tokens.css"
   },
-  "files": ["dist", "src/deployments.json"],
+  "files": [
+    "dist",
+    "src/deployments.json",
+    "styles"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
