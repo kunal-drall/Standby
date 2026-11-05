@@ -1,70 +1,40 @@
-import { CHAIN_ID, CHAIN_NAME, isDeployed } from '@standby/shared';
-import { useState } from 'react';
-import { NavLink, Route, Routes } from 'react-router';
-import { Placeholder } from './pages/Placeholder';
-import { DOCS_URL, PARTIES, ROUTES, type Party } from './routes';
+import { Route, Routes } from 'react-router';
+import { Layout } from './components/Layout';
+import { TxScopeProvider } from './components/Tx';
+import { Activity } from './pages/Activity';
+import { Borrower } from './pages/Borrower';
+import { Buyer } from './pages/Buyer';
+import { Capacity } from './pages/Capacity';
+import { Issuer } from './pages/Issuer';
+import { Lender } from './pages/Lender';
+import { NotFound, Privacy, Terms } from './pages/Legal';
+import { Overview } from './pages/Overview';
+import { Settings } from './pages/Settings';
+import { DataProvider } from './state/data';
+import { SettingsProvider } from './state/settings';
 
 export function App() {
-  const [party, setParty] = useState<Party>('Issuer');
-  const header = ROUTES.filter((r) => r.placement === 'header');
-  const footer = ROUTES.filter((r) => r.placement === 'footer');
-
   return (
-    <div className="shell">
-      <header className="header">
-        <NavLink to="/" className="brand">
-          Standby
-        </NavLink>
-        <nav className="nav" aria-label="Main">
-          {header.slice(1).map((r) => (
-            <NavLink key={r.path} to={r.path}>
-              {r.title}
-            </NavLink>
-          ))}
-          <a href={DOCS_URL} target="_blank" rel="noreferrer">
-            Docs
-          </a>
-        </nav>
-        <div className="status">
-          <label>
-            <span className="sr-only">Acting as</span>
-            <select value={party} onChange={(e) => setParty(e.target.value as Party)}>
-              {PARTIES.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-          </label>
-          <span className="chip" title={`Chain ID ${CHAIN_ID}`}>
-            {CHAIN_NAME}
-            {isDeployed() ? '' : ' · not deployed'}
-          </span>
-        </div>
-      </header>
-
-      <main className="main">
-        <Routes>
-          {ROUTES.map((r) => (
-            <Route key={r.path} path={r.path} element={<Placeholder route={r} />} />
-          ))}
-          <Route
-            path="*"
-            element={
-              <Placeholder
-                route={{ path: '*', title: 'Not found', summary: 'No page here.', chunk: 'C7', placement: 'footer' }}
-              />
-            }
-          />
-        </Routes>
-      </main>
-
-      <footer className="footer">
-        {footer.map((r) => (
-          <NavLink key={r.path} to={r.path}>
-            {r.title}
-          </NavLink>
-        ))}
-        <span>Testnet demo. No real value.</span>
-      </footer>
-    </div>
+    <SettingsProvider>
+      <DataProvider>
+        <TxScopeProvider>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/issuer" element={<Issuer />} />
+              <Route path="/lender" element={<Lender />} />
+              <Route path="/buyer" element={<Buyer />} />
+              <Route path="/borrower" element={<Borrower />} />
+              <Route path="/capacity" element={<Capacity />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </TxScopeProvider>
+      </DataProvider>
+    </SettingsProvider>
   );
 }
