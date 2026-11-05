@@ -1,6 +1,8 @@
-# Standby interfaces v1 (frozen)
+# Standby interfaces v1.1 (frozen)
 
 The only spec the code is built from. Change it only by team agreement: bump the version line, note it in `docs/plan.md` (Decision log), and tell every session to restart its context.
+
+v1.1 (2026-11-06): closes the gaps found while scaffolding. `BidBook.reserve` takes the `loanId` its `Reserved` event already carried; read-only views added for the UI and keeper; custom errors named; settlement skips a buyer the issuer has since removed from the allowlist. All additions are listed in section 5a.
 
 ## 1. Constants (verified 5 Nov 2026)
 
@@ -94,7 +96,7 @@ function postBid(uint256 amount, uint16 discountBps, uint40 notice) external ret
 function requestExit(uint256 bidId) external;              // bid owner; sets exitAt = now + notice
 function withdraw(uint256 bidId, uint256 amount) external; // owner; requires exitAt != 0 && now >= exitAt && amount <= amount - reserved
 function freeCapacity(uint40 until) external view returns (uint256); // sum of (amount - reserved) over open bids with exitAt == 0 || exitAt > until
-function reserve(uint40 until, uint256 needed) external returns (uint256[] memory bidIds, uint256[] memory amounts); // onlyMarket; cheapest discount first; reverts InsufficientCapacity
+function reserve(uint256 loanId, uint40 until, uint256 needed) external returns (uint256[] memory bidIds, uint256[] memory amounts); // onlyMarket; cheapest discount first; reverts InsufficientCapacity
 function release(uint256 bidId, uint256 amount) external;  // onlyMarket
 function fill(uint256 bidId, uint256 usdtAmount, address to) external; // onlyMarket; reserved -= usdtAmount; amount -= usdtAmount; USDT to `to`
 function getBid(uint256 bidId) external view returns (Bid memory);
@@ -112,6 +114,7 @@ Rules: `discountBps <= maxDiscountBps` else `DiscountTooHigh`; `notice >= minNot
 ```solidity
 enum LoanState { None, Open, Repaid, Settled }
 struct Loan { address borrower; uint256 collateral; uint256 principal; uint40 openedAt; uint40 maturity; LoanState state; }
+struct Params { uint16 maxLtvBps; uint16 liqThresholdBps; uint16 haircutBps; uint16 rateBps; uint16 commitFeeBps; uint40 loanTerm; uint40 grace; uint40 maxNavAge; }
 constructor(address usdt, address asset, address oracle, address bidBook, Params p);
 // pool
 function deposit(uint256 assets) external returns (uint256 shares);
@@ -137,7 +140,7 @@ Math:
 - `value = collateral * nav / 1e18`; `priceLimit = value * maxLtvBps / 1e4`.
 - `dueAt(t) = principal + principal * rateBps * (t - openedAt) / (1e4 * 365 days)`.
 - `needed = ceil(dueAt(maturity + grace) * 1e4 / (1e4 - haircutBps))`; `openLoan` calls `bidBook.reserve(maturity + grace, needed)`.
-- `capacityLimit` = the largest principal whose `needed` fits `freeCapacity(maturity + grace)`.
+- `capacityLimit` = the largest principal whose `needed` fits `freeCapacity(maturity + grace)`, with `maturity = now + loanTerm`.
 - `openLoan` requires: NAV fresh (`StaleNav`), asset not paused, `principal <= priceLimit` (`AboveLtv`), capacity reserved, idle USDT >= principal (`InsufficientCash`).
 - `isSettleable`: state Open and (`now > maturity + grace` or, P1, `dueAt(now) * 1e4 > value * liqThresholdBps`).
 - `settle`: `remaining = dueAt(now)`; for each reservation in stored order: `price = nav * (1e4 - discount) / 1e4`; `take = min(reserved_i, remaining)`; `shares = ceil(take * 1e18 / price)`, capped at collateral left (then `take = shares * price / 1e18`); `bidBook.fill(id, take, market)`; asset `transfer(buyer, shares)`; `release` the unused part; after the loop emit `Shortfall` if `remaining > 0`; return leftover collateral to the borrower.
@@ -145,6 +148,65 @@ Math:
 - Every token-moving function is `nonReentrant` and follows checks-effects-interactions.
 
 The deploy script grants `CONTRACT` to the market and the bid book, `HOLDER` to the borrower, `BUYER` to both buyers.
+
+## 5a. v1.1 additions
+
+Ids: bid ids and loan ids start at 0 and count up (`bidCount()`, `loanCount()`).
+
+```solidity
+// AllowlistRegistry
+function issuer() external view returns (address);
+function roles(address account) external view returns (uint8);
+error NotIssuer();
+
+// RestrictedAsset
+function paused() external view returns (bool);
+function registry() external view returns (address);
+function issuer() external view returns (address);
+event PauseSet(bool paused);
+error Paused(); error NotAllowed(); error NotIssuer(); error NotHolder();
+
+// NavOracle
+function issuer() external view returns (address);
+error NotIssuer(); error ZeroNav();
+
+// BidBook
+function market() external view returns (address);
+function usdt() external view returns (address);
+function registry() external view returns (address);
+function maxDiscountBps() external view returns (uint16);
+function minNotice() external view returns (uint40);
+function openBidIds() external view returns (uint256[] memory); // open bids, cheapest discount first, ties by id
+event MarketSet(address market);
+error NotBuyer(); error NotBidOwner(); error NotMarket(); error NotDeployer(); error MarketAlreadySet();
+error ZeroAmount(); error BidClosed(); error ExitAlreadyRequested(); error ExitNotRequested();
+error NoticeNotOver(); error ExceedsUnreserved(); error ExceedsReserved();
+error DiscountTooHigh(); error NoticeTooShort(); error TooManyBids(); error InsufficientCapacity();
+
+// StandbyMarket
+function usdt() external view returns (address);
+function asset() external view returns (address);
+function oracle() external view returns (address);
+function bidBook() external view returns (address);
+function params() external view returns (Params memory);
+function loanCount() external view returns (uint256);
+function sharesOf(address lender) external view returns (uint256);
+function totalShares() external view returns (uint256);
+function cash() external view returns (uint256);                      // idle USDT the pool can lend or pay out
+function totalPrincipal() external view returns (uint256);            // outstanding principal of open loans
+function convertToAssets(uint256 shares) external view returns (uint256);
+function quoteRepay(uint256 loanId) external view returns (uint256 dueNow, uint256 fees); // repay pulls dueNow + fees
+error ZeroAmount(); error ZeroShares(); error AssetPaused(); error LoanNotOpen(); error NotBorrower(); error NotSettleable();
+error StaleNav(); error AboveLtv(); error InsufficientCash();
+```
+
+Rules added in v1.1:
+- A bid closes when its `amount` reaches 0 (fully withdrawn or filled); a closed bid leaves `openBidIds`.
+- Pool shares: `shares = assets * (totalShares + 1) / (totalAssets + 1)` on deposit, `assets = shares * (totalAssets + 1) / (totalShares + 1)` on withdraw, both rounded down. `cash` is tracked internally, so a direct USDT transfer to the market does not change the share price.
+- `totalAssets` accrues interest over all open loans from aggregate sums (`totalPrincipal` and the principal-weighted open time), so it can differ from the sum of `due` by a few base units of rounding.
+- The NAV-based trigger in `isSettleable` (P1) requires fresh NAV; the maturity trigger does not.
+- `settle` skips a reserved bid whose buyer is no longer allowlisted (its whole reservation is released), so one revoked buyer cannot block settlement.
+- `repay` may be called by the borrower at any time while the loan is open, including after maturity plus grace, until someone settles it.
 
 ## 6. Read API (P1, served by the keeper process, Hono, JSON)
 
