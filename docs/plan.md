@@ -63,8 +63,11 @@ Items only a human can do. Work continues around them with placeholders; answer 
 
 | Opened | Item | Placeholder in use | Answer |
 |---|---|---|---|
+| 2026-11-06 | Fund the six testnet wallets (faucet needs a GitHub login and a Turnstile captcha): WBT for all six, test USDT for lender, both buyers and borrower (≥ 1,500 / 600 / 500 / enough for interest). Then run `./scripts/deploy-testnet.sh` | Everything rehearsed on a local fork of chain 1874 with the real test USDT (`scripts/local-chain.sh`) | |
+| 2026-11-06 | Deploy web and docs as static sites (`npx vercel deploy --prod` from `web/` and `site/`) and set the final domains (`TODO(kunal)` in `site/docusaurus.config.ts`, README, `docs/SUBMISSION.md`) | Builds pass; links are placeholders | |
+| 2026-11-06 | Fill the README transaction table and `docs/plan.md` addresses after the testnet deploy; team opinions in `WHITECHAIN_FEEDBACK.md`; team names and handles in `docs/SUBMISSION.md`; record the video | `TODO(kunal)` markers | |
 | 2026-11-06 | The repo had no `main`. Approve creating `main` from the first commit (`chore: specs and plan`) and merging the scaffold branch into it as the first PR | Scaffold sits on branch `claude/zen-ptolemy-90yxwn` | |
-| 2026-11-06 | Spec gaps in `interfaces.md` v1 (team decision, frozen spec): (a) event `Reserved` has `loanId` but `BidBook.reserve()` takes none; (b) no `paused()` view on RestrictedAsset; (c) no pool-share balance view or loan count on StandbyMarket for the lender page and the keeper | Shared ABIs follow the spec as written; keeper can find loans from `LoanOpened` events | |
+| 2026-11-06 | Spec gaps in `interfaces.md` v1 (team decision, frozen spec): (a) event `Reserved` has `loanId` but `BidBook.reserve()` takes none; (b) no `paused()` view on RestrictedAsset; (c) no pool-share balance view or loan count on StandbyMarket for the lender page and the keeper | Resolved without waiting: interfaces v1.1 (see Decision log). Review the v1.1 section 5a when free | Decided in build; Kunal to confirm |
 | 2026-11-06 | Local kit files not received: `.claude/agents/*`, `.claude/settings.json`, `.claude/hooks/filter-output.sh` | Agent roles in `docs/ai/prompts.md` | |
 | 2026-11-06 | Ask ETHGlobal staff: idea from our Nectar research, all code new, origin stated in README; eligible? | README states the origin | |
 | 2026-11-06 | Kunal's git email for commit authorship | `KUNAL_GIT_EMAIL` in setup | Used the public email on the kunal-drall GitHub profile; replace with `git config user.email` if another is wanted |
@@ -73,6 +76,16 @@ Items only a human can do. Work continues around them with placeholders; answer 
 
 | Date | Decision | Why | Who |
 |---|---|---|---|
+| 2026-11-06 | Interfaces v1.1: `BidBook.reserve(loanId, until, needed)`; read-only views for UI and keeper (`paused`, `issuer`, `roles`, `openBidIds`, `loanCount`, `sharesOf`, `totalShares`, `cash`, `totalPrincipal`, `convertToAssets`, `quoteRepay`, `params`); ids start at 0; named custom errors | Close the v1 gaps without waiting; all additions are views or names, so no rule changes | Build |
+| 2026-11-06 | Pool `cash` tracked internally; share math with a +1 virtual offset; interest accrued from aggregate sums | A direct USDT transfer cannot move the share price; `totalAssets` stays O(1) | Build |
+| 2026-11-06 | A bid backs loans only while its buyer holds BUYER; `settle` skips (releases) a revoked buyer's reservation | One revoked buyer cannot block settlement, and shares only go to allowlisted buyers | Build |
+| 2026-11-06 | NAV-based early default needs fresh NAV; the maturity trigger does not. Late repayment allowed until someone settles | A stale NAV should not liquidate anyone early; a late payer still makes the lender whole | Build |
+| 2026-11-06 | Commitment fee (R11) per reservation: `reserved × 2% × elapsed / year`, paid straight to each buyer at repayment; `quoteRepay` shows it | Matches interfaces section 5 `repay`; exact per-buyer amounts | Build |
+| 2026-11-06 | Read API list endpoints return `{decimals, items}` objects (`{decimals, bids}`, `{decimals, loans}`, `{decimals, events}`), events paged by 50,000 blocks | Section 6 asked for `decimals` at the top level, which a bare array cannot carry | Build |
+| 2026-11-06 | Rehearse every flow on an anvil fork of chain 1874 (official test USDT present; balances set at storage slot 51) instead of waiting for faucet funds | The faucet needs a human; the fork runs the same contracts, scripts, keeper and E2E | Build |
+| 2026-11-06 | Dropped R15 (1inch Aqua): Aqua and SwapVM are deterministic deployments only on their listed chains (1874 is not one; a copy "is not Aqua"), and Aqua keeps maker funds in the maker's wallet while Standby's guarantee needs bid USDT escrowed in BidBook. Dropped R16 (gasless) per the cut order | More than the one-hour budget and a design conflict | Build |
+| 2026-11-06 | Removed the `[etherscan]` block from `foundry.toml`; verification flags go on the command line | Foundry rejects `chain = 1874` ("Chain 1874 not supported") during broadcast | Build |
+| 2026-11-06 | All work stays on branch `claude/zen-ptolemy-90yxwn` until `main` exists | The session may push only to its assigned branch | Build |
 | 2026-11-06 | Use only `https://rpc.testnet.whitechain.io`; `rpc-testnet.whitechain.io` (hyphen) answers chain 2625, a different network | Checked with `eth_chainId`: 0x752 = 1874 vs 0xa41 = 2625 | Scaffold |
 | 2026-11-06 | Foundry: solc 0.8.28 (sources `^0.8.24`), `evm_version = "cancun"`; forge-std v1.17.0 and OpenZeppelin v5.6.1 as root git submodules | Testnet blocks carry Cancun and Prague fields (client op-reth); submodules are the Foundry default. C1 confirms by deploying | Scaffold |
 | 2026-11-06 | Placeholder ABIs in `packages/shared/src/abi.ts` hand-written from the spec with viem `parseAbi`; C5 replaces them with Foundry output | Keeper (C6) and web (C7) can start before contracts exist | Scaffold |
