@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - keeper
+  - web
+  - site
+
+onlyBuiltDependencies:
+  - esbuild
