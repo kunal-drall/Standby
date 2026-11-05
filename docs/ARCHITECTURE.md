@@ -124,7 +124,9 @@ stateDiagram-v2
 | Keeper | Call `settle` | Anything else (anyone can call `settle`) |
 | Deployer | Set the bid book's market once | Anything after that |
 
-Known limits: an issuer pause blocks settlement until unpaused; NAV is trusted from the issuer; no audit.
+Shares owed to an account that is off the allowlist at repayment or settlement are held by the market as a claim (`claimShares`), so the issuer's allowlist changes can never block a loan from closing.
+
+Known limits: an issuer pause blocks repayment and settlement until unpaused; NAV is trusted from the issuer and settlement waits for a fresh one; a lender can exit before a pending shortfall is realised; no audit.
 
 ## 8. Off-chain parts
 
