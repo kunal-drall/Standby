@@ -1,0 +1,87 @@
+@import '../../../packages/shared/styles/tokens.css';
+
+/* Map the shared Standby tokens to Infima. Tokens switch with prefers-color-scheme and data-theme. */
+:root {
+  --ifm-font-family-base: var(--font-sans);
+  --ifm-font-family-monospace: var(--font-mono);
+  --ifm-color-primary: var(--color-accent);
+  --ifm-color-primary-dark: var(--color-accent-strong);
+  --ifm-color-primary-darker: var(--color-accent-strong);
+  --ifm-color-primary-darkest: var(--color-accent-strong);
+  --ifm-color-primary-light: var(--color-accent);
+  --ifm-color-primary-lighter: var(--color-accent);
+  --ifm-color-primary-lightest: var(--color-accent);
+  --ifm-background-color: var(--color-bg);
+  --ifm-background-surface-color: var(--color-surface);
+  --ifm-font-color-base: var(--color-text);
+  --ifm-font-color-secondary: var(--color-text-muted);
+  --ifm-color-content: var(--color-text);
+  --ifm-color-content-secondary: var(--color-text-muted);
+  --ifm-heading-color: var(--color-text);
+  --ifm-link-color: var(--color-accent);
+  --ifm-link-hover-color: var(--color-accent-strong);
+  --ifm-toc-border-color: var(--color-border);
+  --ifm-color-emphasis-200: var(--color-surface-2);
+  --ifm-color-emphasis-300: var(--color-border);
+  --ifm-table-border-color: var(--color-border);
+  --ifm-table-stripe-background: var(--color-surface-2);
+  --ifm-table-head-background: var(--color-surface-2);
+  --ifm-code-background: var(--color-surface-2);
+  --ifm-code-border-radius: var(--radius-sm);
+  --ifm-global-radius: var(--radius-md);
+  --ifm-navbar-background-color: var(--color-surface);
+  --ifm-navbar-shadow: var(--shadow-card);
+  --ifm-footer-background-color: var(--color-surface);
+  --ifm-footer-color: var(--color-text-muted);
+  --ifm-footer-title-color: var(--color-text);
+  --ifm-footer-link-color: var(--color-text-muted);
+  --ifm-menu-color: var(--color-text-muted);
+  --ifm-menu-color-active: var(--color-accent);
+  --ifm-menu-color-background-active: var(--color-accent-soft);
+  --ifm-menu-color-background-hover: var(--color-surface-2);
+  --ifm-hr-border-color: var(--color-border);
+  --ifm-pre-background: var(--color-surface-2);
+  --docusaurus-highlighted-code-line-bg: var(--color-accent-soft);
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.navbar__link--active,
+.menu__link--active {
+  color: var(--color-accent);
+}
+
+.footer {
+  border-top: 1px solid var(--color-border);
+}
+
+table {
+  display: table;
+  width: 100%;
+}
+
+@media (max-width: 996px) {
+  .markdown table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Deployments table */
+.deploy-table td code {
+  word-break: break-all;
+}
+.deploy-missing {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
