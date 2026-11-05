@@ -1,6 +1,7 @@
 import { formatDuration, LoanState, parseShares, SHARE_DECIMALS, standbyMarketAbi } from '@standby/shared';
 import { useEffect, useState } from 'react';
 import { formatUnits, parseEventLogs, parseUnits } from 'viem';
+import { ClaimCard } from '../components/Claims';
 import { liveDue, LoansTable } from '../components/Loans';
 import { TxButton, TxPanel, useTx } from '../components/Tx';
 import {
@@ -311,7 +312,7 @@ export function Borrower() {
                   ]}
                   risks={[
                     'If you do not repay by maturity plus grace, anyone can settle: reserved bids buy your shares at their discount, and only the leftover comes back.',
-                    'A stale NAV or a paused asset blocks new loans; a pause also delays repayment.',
+                    'A stale NAV or a paused asset blocks new loans; a pause also blocks repayment until the issuer unpauses.',
                     'The amount due grows every second, so the approval includes a small buffer.',
                   ]}
                 />
@@ -321,6 +322,7 @@ export function Borrower() {
               </div>
               <aside className="split-side">
                 <OpenLoanCard />
+                <ClaimCard />
               </aside>
             </div>
           </>

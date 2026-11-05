@@ -59,6 +59,12 @@ export type PartyView = {
   poolShares: bigint;
   poolValue: bigint;
   roles: number;
+  /** v1.2: shares held in the market for this account (it was off the allowlist when owed). */
+  claimableShares: bigint;
+  /** v1.2: commitment fees held for this buyer (the transfer failed at repayment). */
+  claimableFees: bigint;
+  /** v1.2: BidBook.openBidsOf. */
+  openBids: number;
 };
 
 export type Snapshot = {
@@ -71,6 +77,8 @@ export type Snapshot = {
   params: Params;
   maxDiscountBps: number;
   minNotice: number;
+  maxNotice: number;
+  maxBidsPerBuyer: number;
   nav: bigint;
   navUpdatedAt: number;
   paused: boolean;
@@ -112,6 +120,9 @@ export async function loadSnapshot(
         pub.readContract({ address: c.asset, abi: restrictedAssetAbi, functionName: 'balanceOf', args: [partyAddress], ...at }),
         pub.readContract({ address: c.market, abi: standbyMarketAbi, functionName: 'sharesOf', args: [partyAddress], ...at }),
         pub.readContract({ address: c.registry, abi: allowlistRegistryAbi, functionName: 'roles', args: [partyAddress], ...at }),
+        pub.readContract({ address: c.market, abi: standbyMarketAbi, functionName: 'claimableShares', args: [partyAddress], ...at }),
+        pub.readContract({ address: c.market, abi: standbyMarketAbi, functionName: 'claimableFees', args: [partyAddress], ...at }),
+        pub.readContract({ address: c.bidBook, abi: bidBookAbi, functionName: 'openBidsOf', args: [partyAddress], ...at }),
       ])
     : Promise.resolve(null);
 
@@ -122,6 +133,8 @@ export async function loadSnapshot(
     rawParams,
     maxDiscountBps,
     minNotice,
+    maxNotice,
+    maxBidsPerBuyer,
     latest,
     paused,
     assetSupply,
@@ -141,6 +154,8 @@ export async function loadSnapshot(
     pub.readContract({ address: c.market, abi: standbyMarketAbi, functionName: 'params', ...at }),
     pub.readContract({ address: c.bidBook, abi: bidBookAbi, functionName: 'maxDiscountBps', ...at }),
     pub.readContract({ address: c.bidBook, abi: bidBookAbi, functionName: 'minNotice', ...at }),
+    pub.readContract({ address: c.bidBook, abi: bidBookAbi, functionName: 'MAX_NOTICE', ...at }),
+    pub.readContract({ address: c.bidBook, abi: bidBookAbi, functionName: 'MAX_BIDS_PER_BUYER', ...at }),
     pub.readContract({ address: c.oracle, abi: navOracleAbi, functionName: 'latest', ...at }),
     pub.readContract({ address: c.asset, abi: restrictedAssetAbi, functionName: 'paused', ...at }),
     pub.readContract({ address: c.asset, abi: restrictedAssetAbi, functionName: 'totalSupply', ...at }),
@@ -249,6 +264,8 @@ export async function loadSnapshot(
     params,
     maxDiscountBps: Number(maxDiscountBps),
     minNotice: Number(minNotice),
+    maxNotice: Number(maxNotice),
+    maxBidsPerBuyer: Number(maxBidsPerBuyer),
     nav: latest[0],
     navUpdatedAt: Number(latest[1]),
     paused,
@@ -274,6 +291,9 @@ export async function loadSnapshot(
             poolShares: party[3],
             poolValue,
             roles: Number(party[4]),
+            claimableShares: party[5],
+            claimableFees: party[6],
+            openBids: Number(party[7]),
           }
         : null,
   };

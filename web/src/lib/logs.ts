@@ -9,7 +9,7 @@ import {
   standbyMarketAbi,
 } from '@standby/shared';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { decodeEventLog, parseAbi, type Abi, type Hash, type PublicClient } from 'viem';
+import { decodeEventLog, type Abi, type Hash, type PublicClient } from 'viem';
 import { CONTRACTS, LOG_CHUNK, START_BLOCK, type ContractKey } from '../config';
 import { publicClientFor } from './clients';
 import { readErrorText } from './errors';
@@ -38,8 +38,7 @@ const ABI_OF: Record<EventContract, Abi> = {
   registry: allowlistRegistryAbi as Abi,
   asset: restrictedAssetAbi as Abi,
   oracle: navOracleAbi as Abi,
-  // Evicted was added to BidBook after the shared ABI snapshot.
-  bidBook: [...bidBookAbi, ...parseAbi(['event Evicted(uint256 indexed bidId, uint256 refunded)'])] as Abi,
+  bidBook: bidBookAbi as Abi,
   market: standbyMarketAbi as Abi,
 };
 

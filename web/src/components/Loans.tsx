@@ -149,14 +149,14 @@ export function LoansTable({ loans, mode }: { loans: LoanView[]; mode: 'borrower
                     </Num>
                   </td>
                   <td>
-                    <Num tip={`maturity + grace (${formatDuration(snap.params.grace)}) = ${formatTime(graceEnd)}. After this anyone can settle.`}>
+                    <Num tip={`maturity + grace (${formatDuration(snap.params.grace)}) = ${formatTime(graceEnd)}. After this anyone can settle (with a fresh NAV).`}>
                       {open ? relative(graceEnd, now) : formatTime(graceEnd)}
                     </Num>
                   </td>
                   <td>
                     <Num
                       className="num-plain"
-                      tip={`getLoan(${loan.id}).state = ${loanStateName(loan.state)}; isSettleable = ${loan.settleable} (open and now > maturity + grace, or debt above ${pct(snap.params.liqThresholdBps)} of collateral value)`}
+                      tip={`getLoan(${loan.id}).state = ${loanStateName(loan.state)}; isSettleable = ${loan.settleable} (open, fresh NAV, and now > maturity + grace or debt above ${pct(snap.params.liqThresholdBps)} of collateral value)`}
                     >
                       <StateBadge loan={loan} now={now} snap={snap} />
                     </Num>

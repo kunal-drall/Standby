@@ -1,4 +1,8 @@
-import { formatDuration, Role } from '@standby/shared';
+import { bidBookAbi, formatDuration, Role } from '@standby/shared';
+import { useState } from 'react';
+import { parseEventLogs } from 'viem';
+import { TxButton, TxPanel, useTx } from '../components/Tx';
+import { CONTRACTS } from '../config';
 import { ExitStatus } from './Buyer';
 import {
   AddressCell,
@@ -29,7 +33,7 @@ function BacksBadge({ snap, bid }: { snap: Snapshot; bid: BidView }) {
   const time = backsUntil(bid, snap.freeUntil);
   const free = bid.amount - bid.reserved;
   const tip = !buyer
-    ? 'The buyer no longer holds the BUYER role, so this bid is left out of capacity.'
+    ? 'The buyer no longer holds the BUYER role: this bid backs no new loan, and anyone can evict its free USDT back to the buyer.'
     : !time
       ? `In exit: unlocks ${formatTime(bid.exitAt)}, before a loan opened now would end (${formatTime(snap.freeUntil)}).`
       : free === 0n
@@ -55,6 +59,18 @@ export function Capacity() {
   const now = useNow();
   const f = useFmt();
   const { gate } = useGate();
+  const tx = useTx();
+  const [target, setTarget] = useState<bigint | null>(null);
+  const evict = (bid: BidView) => {
+    if (!CONTRACTS) return;
+    const bidBook = CONTRACTS.bidBook;
+    setTarget(bid.id);
+    void tx.run(`Evict bid #${bid.id}`, async (send) => {
+      const receipt = await send.write({ label: 'Evict', address: bidBook, abi: bidBookAbi, functionName: 'evict', args: [bid.id] });
+      const ev = parseEventLogs({ abi: bidBookAbi, logs: receipt.logs, eventName: 'Evicted' })[0];
+      return `Bid #${bid.id}: ${f.usdt(ev?.args.refunded ?? bid.amount - bid.reserved)} refunded to its buyer; the slot is free.`;
+    });
+  };
 
   return (
     <>
@@ -121,7 +137,7 @@ export function Capacity() {
                   risks={[
                     'When free capacity is low, the capacity limit, not the price limit, caps how much a borrower can take.',
                     'Exits lower capacity over time; reserved USDT stays locked until its loan is repaid or settled.',
-                    'A buyer removed from the allowlist stops counting at once and is skipped at settlement.',
+                    'A buyer removed from the allowlist stops backing new loans at once; anyone can evict its free USDT back to it, while its reserved USDT still fills at settlement.',
                   ]}
                 />
 
@@ -179,6 +195,14 @@ export function Capacity() {
                               </td>
                               <td>
                                 <BacksBadge snap={snap} bid={b} />
+                                {!isBuyer(snap, b) && b.amount > b.reserved && (
+                                  <>
+                                    {' '}
+                                    <TxButton size="sm" variant="secondary" pending={tx.pending && target === b.id} disabled={tx.busy} onClick={() => evict(b)}>
+                                      Evict
+                                    </TxButton>
+                                  </>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -186,6 +210,7 @@ export function Capacity() {
                       </table>
                     </div>
                   )}
+                  <TxPanel state={tx.state} />
                 </Card>
 
                 <Card title="Unlocking bids">

@@ -53,7 +53,7 @@ function useDescribe(): Describe {
       case 'Released':
         return `Released ${usdt(a.amount)} back to bid #${String(a.bidId)}`;
       case 'Evicted':
-        return `Bid #${String(a.bidId)} evicted (buyer removed from the allowlist): ${usdt(a.refunded)} refunded`;
+        return `Bid #${String(a.bidId)} evicted (buyer lost the BUYER role): ${usdt(a.refunded)} refunded to the buyer`;
       case 'Filled':
         return `Bid #${String(a.bidId)} paid ${usdt(a.usdtAmount)} for defaulted collateral`;
       case 'Deposited':
@@ -66,6 +66,14 @@ function useDescribe(): Describe {
         return `Loan #${String(a.loanId)} repaid: ${usdt(a.paid)} to the pool, ${usdt(a.commitmentFees)} commitment fees to buyers`;
       case 'LoanSettled':
         return `Loan #${String(a.loanId)} settled: ${usdt(a.recovered)} recovered, ${shares(a.collateralToBuyers)} to buyers, ${shares(a.collateralReturned)} returned`;
+      case 'SharesHeld':
+        return `Market is holding ${shares(a.shares)} for ${who(a.account)} until it is allowlisted again`;
+      case 'SharesClaimed':
+        return `${who(a.account)} claimed ${shares(a.shares)} held by the market`;
+      case 'FeeHeld':
+        return `Market is holding a ${usdt(a.amount)} commitment fee for ${who(a.buyer)}`;
+      case 'FeesClaimed':
+        return `${who(a.buyer)} claimed ${usdt(a.amount)} of commitment fees`;
       case 'Shortfall':
         return `Loan #${String(a.loanId)} settled short by ${usdt(a.amount)}`;
       default:

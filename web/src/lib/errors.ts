@@ -11,7 +11,6 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   decodeErrorResult,
-  parseAbi,
   HttpRequestError,
   InsufficientFundsError,
   TimeoutError,
@@ -31,8 +30,6 @@ export const ERROR_ABI: AbiError[] = (() => {
     ...restrictedAssetAbi,
     ...allowlistRegistryAbi,
     ...navOracleAbi,
-    // Added to BidBook after the shared ABI snapshot; harmless duplicates once it is regenerated.
-    ...parseAbi(['error NoticeTooLong()', 'error StillBuyer()']),
   ] as Abi;
   for (const item of all) {
     if (item.type === 'error' && !seen.has(item.name)) {
@@ -68,7 +65,7 @@ export const ERROR_TEXT: Record<string, string> = {
   ExceedsReserved: 'That is more than the USDT reserved on this bid.',
   DiscountTooHigh: 'The discount is above the highest discount the bid book accepts.',
   NoticeTooShort: 'The notice period is shorter than the bid book minimum.',
-  TooManyBids: 'Too many open bids: the bid book holds at most 32, and each buyer has a per-wallet limit too.',
+  TooManyBids: 'Too many open bids: the bid book holds at most 32 in total and 4 per buyer.',
   NoticeTooLong: 'The notice period is longer than the bid book maximum (30 days).',
   StillBuyer: 'This buyer still holds the BUYER role, so its bid cannot be evicted.',
   InsufficientCapacity: 'Not enough free bid USDT to back this loan after the haircut. Borrow less or wait for more bids.',
@@ -77,14 +74,14 @@ export const ERROR_TEXT: Record<string, string> = {
   BadParams: 'The market was deployed with invalid parameters.',
   ZeroShares: 'The deposit is too small to mint any pool shares.',
   InsufficientShares: 'That is more pool shares than this wallet owns.',
-  AssetPaused: 'The asset is paused, so no new loan can open.',
+  AssetPaused: 'The asset is paused, so loans cannot open, be repaid or be settled until the issuer unpauses it.',
   StaleNav: 'The NAV is older than the maximum age. The issuer must post a new NAV before loans can open.',
   AboveLtv: 'The amount is above the price limit (max LTV × collateral value at NAV).',
   InsufficientCash: 'The pool does not have enough idle USDT for this right now.',
   UnknownLoan: 'There is no loan with that id.',
   LoanNotOpen: 'This loan is not open: it was already repaid or settled.',
   NotBorrower: 'Only the borrower of this loan can repay it. Switch "Acting as" to Borrower.',
-  NotSettleable: 'This loan cannot be settled yet: it is before maturity plus grace and within the liquidation threshold.',
+  NotSettleable: 'This loan cannot be settled yet: it is before maturity plus grace and within the liquidation threshold, or the NAV is stale.',
   // OpenZeppelin
   ERC20InsufficientBalance: 'The wallet’s token balance is too low for this.',
   ERC20InsufficientAllowance: 'The contract is not approved to move that many tokens.',

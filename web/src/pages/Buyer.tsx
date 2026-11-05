@@ -1,6 +1,7 @@
 import { bidBookAbi, formatDuration, percentToBps } from '@standby/shared';
 import { useState } from 'react';
 import { parseEventLogs, parseUnits } from 'viem';
+import { ClaimCard } from '../components/Claims';
 import { TxButton, TxPanel, useTx } from '../components/Tx';
 import {
   Amount,
@@ -78,6 +79,9 @@ function PostBidCard() {
   const price = bps !== null ? priceOf(snap, bps) : null;
   const tooHigh = bps !== null && bps > snap.maxDiscountBps;
   const tooShort = notice !== null && notice < snap.minNotice;
+  const tooLong = notice !== null && notice > snap.maxNotice;
+  const openCount = snap.party?.openBids ?? 0;
+  const atLimit = openCount >= snap.maxBidsPerBuyer;
   const balance = snap.party?.usdt ?? 0n;
 
   return (
@@ -115,10 +119,11 @@ function PostBidCard() {
             inputMode="numeric"
             value={noticeValue}
             onChange={(e) => setNoticeText(e.target.value)}
-            aria-invalid={notice === null || tooShort || undefined}
+            aria-invalid={notice === null || tooShort || tooLong || undefined}
           />
-          <span className={tooShort ? 'hint text-warning' : 'hint'}>
-            min <Num tip={`BidBook.minNotice() = ${snap.minNotice} s`}>{formatDuration(snap.minNotice)}</Num>
+          <span className={tooShort || tooLong ? 'hint text-warning' : 'hint'}>
+            <Num tip={`BidBook.minNotice() = ${snap.minNotice} s`}>{formatDuration(snap.minNotice)}</Num> to{' '}
+            <Num tip={`BidBook.MAX_NOTICE() = ${snap.maxNotice} s`}>{formatDuration(snap.maxNotice)}</Num>
           </span>
         </div>
       </div>
@@ -143,6 +148,14 @@ function PostBidCard() {
             ) : (
               '—'
             )}
+          </dd>
+        </div>
+        <div>
+          <dt>Your open bids</dt>
+          <dd className={atLimit ? 'text-warning' : undefined}>
+            <Num tip={`BidBook.openBidsOf(active wallet), at most MAX_BIDS_PER_BUYER = ${snap.maxBidsPerBuyer}`}>
+              {openCount} of {snap.maxBidsPerBuyer}
+            </Num>
           </dd>
         </div>
         <div>
@@ -324,7 +337,7 @@ export function Buyer() {
                   risks={[
                     'On default your reserved USDT buys shares at your price, whatever the market does.',
                     'Withdrawing before the notice period ends is rejected, and reserved USDT is never withdrawable.',
-                    'If the issuer removes your BUYER role, your bids stop counting as capacity.',
+                    'If the issuer removes your BUYER role, your bids stop backing new loans and anyone can refund their free USDT to you; reserved USDT still fills, and the shares wait in the market until you are allowlisted again.',
                   ]}
                 />
                 <Card title="My bids" aside={<span className="muted small">newest first</span>}>
@@ -333,6 +346,7 @@ export function Buyer() {
               </div>
               <aside className="split-side">
                 <PostBidCard />
+                <ClaimCard />
               </aside>
             </div>
           </>

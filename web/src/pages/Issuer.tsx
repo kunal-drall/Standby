@@ -617,7 +617,7 @@ export function Issuer() {
               risks={[
                 'A NAV older than the maximum age blocks every new loan until a fresh one is posted.',
                 'Pausing also blocks repayments and settlements, since both move shares.',
-                'Removing a buyer from the allowlist takes its bids out of capacity; settlement skips it.',
+                'Removing a buyer from the allowlist takes its free bids out of capacity; its reserved USDT still fills at settlement, and its shares wait in the market as a claim.',
               ]}
             />
             <div className="card-grid">
