@@ -1,38 +1,37 @@
-import { navOracleAbi, whitechainSepolia } from '@standby/shared';
-import { createPublicClient, http, type Address, type PublicClient } from 'viem';
+import { whitechainSepolia } from '@standby/shared';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type Account,
+  type Chain,
+  type PublicClient,
+  type Transport,
+  type WalletClient,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import type { Config } from './config.js';
+
+export type KeeperWallet = WalletClient<Transport, Chain, Account>;
+
+function transport(config: Config) {
+  return http(config.WC_RPC_URL, { timeout: config.RPC_TIMEOUT_MS, retryCount: 2 });
+}
 
 export function createClient(config: Config): PublicClient {
   return createPublicClient({
     chain: whitechainSepolia,
-    transport: http(config.WC_RPC_URL, { timeout: config.RPC_TIMEOUT_MS, retryCount: 2 }),
+    transport: transport(config),
+    pollingInterval: 1_000,
   }) as PublicClient;
 }
 
-/** What the read API needs from the chain; an interface so tests can stub it. */
-export type ChainReader = {
-  blockNumber(): Promise<bigint>;
-  /** Unix seconds of the latest NAV, or null before the oracle is deployed. */
-  navUpdatedAt(): Promise<number | null>;
-  /** Unix seconds of the latest block. */
-  now(): Promise<number>;
-};
-
-export function createChainReader(client: PublicClient, oracle?: Address): ChainReader {
-  return {
-    blockNumber: () => client.getBlockNumber(),
-    async navUpdatedAt() {
-      if (!oracle) return null;
-      const [, updatedAt] = await client.readContract({
-        address: oracle,
-        abi: navOracleAbi,
-        functionName: 'latest',
-      });
-      return Number(updatedAt);
-    },
-    async now() {
-      const block = await client.getBlock();
-      return Number(block.timestamp);
-    },
-  };
+/** Wallet for settle calls. Settling needs no role: anyone may call it. */
+export function createKeeperWallet(config: Config): KeeperWallet | null {
+  if (!config.KEEPER_PK) return null;
+  return createWalletClient({
+    account: privateKeyToAccount(config.KEEPER_PK as `0x${string}`),
+    chain: whitechainSepolia,
+    transport: transport(config),
+  });
 }
