@@ -213,12 +213,12 @@ Rules added in v1.1:
 | Method path | Response |
 |---|---|
 | `GET /api/health` | `{ok, block, navAgeSeconds}` |
-| `GET /api/capacity` | `{committed, reserved, free, unlocking: [{bidId, amount, unlocksAt}], navs: {nav, updatedAt}}` |
-| `GET /api/bids` | `[{bidId, buyer, amount, reserved, discountBps, notice, exitAt, closed}]` |
-| `GET /api/loans` | `[{loanId, borrower, collateral, principal, due, maturity, state, settleable}]` |
-| `GET /api/events?fromBlock=` | decoded events from all five contracts, each with `txHash` and explorer URL |
+| `GET /api/capacity` | `{decimals, committed, reserved, free, freeUntil, unlocking: [{bidId, amount, unlocksAt}], navs: {nav, updatedAt}}` |
+| `GET /api/bids` | `{decimals, bids: [{bidId, buyer, amount, reserved, discountBps, notice, exitAt, closed}]}` |
+| `GET /api/loans` | `{decimals, loans: [{loanId, borrower, collateral, principal, due, maturity, state, settleable}]}` |
+| `GET /api/events?fromBlock=` | `{decimals, fromBlock, toBlock, events: [{contract, event, args, blockNumber, logIndex, txHash, explorerUrl}]}` |
 
-All amounts as decimal strings in base units, plus a `decimals` field at the top level.
+All amounts as decimal strings in base units, with `decimals` (USDT) at the top level; list endpoints wrap the list in an object for that reason (v1.1). `free` is `freeCapacity(freeUntil)` with `freeUntil = now + loanTerm + grace`, the capacity a loan opened now can use; `unlocking` lists bids in exit with their unreserved amount. `/api/events` scans at most 50,000 blocks from `fromBlock` (default: the deployment's start block); page with `toBlock + 1`. Errors: `{ok: false, error}` with 503 when the chain cannot be read or nothing is deployed, 400 for a bad `fromBlock`.
 
 ## 7. Web app routes
 
