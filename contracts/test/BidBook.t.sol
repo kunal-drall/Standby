@@ -223,20 +223,74 @@ contract BidBookTest is StandbyBase {
         fresh.setMarket(outsider);
     }
 
-    function test_thirtyTwoOpenBidCap() public {
+    function test_bookAndPerBuyerCaps() public {
         vm.startPrank(buyer1);
-        for (uint256 i; i < 32; ++i) {
-            bidBook.postBid(1 * unit, uint16(i * 25), NOTICE);
+        for (uint256 i; i < 4; ++i) {
+            bidBook.postBid(1 * unit, uint16(i * 100), NOTICE);
         }
         vm.expectRevert(BidBook.TooManyBids.selector);
         bidBook.postBid(1 * unit, 0, NOTICE);
-
-        bidBook.requestExit(5);
-        vm.warp(block.timestamp + NOTICE);
-        bidBook.withdraw(5, 1 * unit);
-        bidBook.postBid(1 * unit, 0, NOTICE);
         vm.stopPrank();
+        assertEq(bidBook.openBidsOf(buyer1), 4);
+
+        for (uint256 b; b < 7; ++b) {
+            address extra = makeAddr(string(abi.encodePacked("buyer-", b)));
+            vm.prank(issuer);
+            registry.setRoles(extra, Roles.BUYER);
+            usdt.mint(extra, 10 * unit);
+            vm.startPrank(extra);
+            usdt.approve(address(bidBook), type(uint256).max);
+            for (uint256 i; i < 4; ++i) {
+                bidBook.postBid(1 * unit, 100, NOTICE);
+            }
+            vm.stopPrank();
+        }
         assertEq(bidBook.openBidIds().length, 32);
+        vm.expectRevert(BidBook.TooManyBids.selector);
+        vm.prank(buyer2);
+        bidBook.postBid(1 * unit, 0, NOTICE);
+
+        // closing a bid frees both the book slot and the buyer's slot
+        vm.prank(buyer1);
+        bidBook.requestExit(0);
+        vm.warp(block.timestamp + NOTICE);
+        vm.prank(buyer1);
+        bidBook.withdraw(0, 1 * unit);
+        assertEq(bidBook.openBidsOf(buyer1), 3);
+        vm.prank(buyer2);
+        bidBook.postBid(1 * unit, 0, NOTICE);
+    }
+
+    function test_noticeTooLong() public {
+        uint40 tooLong = bidBook.MAX_NOTICE() + 1;
+        vm.expectRevert(BidBook.NoticeTooLong.selector);
+        vm.prank(buyer1);
+        bidBook.postBid(1 * unit, 300, tooLong);
+    }
+
+    function test_evictRevokedBuyerRefundsUnreservedOnly() public {
+        uint256 id = _bid(buyer1, 100 * unit, 300);
+        vm.prank(address(market));
+        bidBook.reserve(0, uint40(block.timestamp + 1), 30 * unit);
+
+        vm.expectRevert(BidBook.StillBuyer.selector);
+        bidBook.evict(id);
+
+        vm.prank(issuer);
+        registry.setRoles(buyer1, 0);
+        uint256 before = usdt.balanceOf(buyer1);
+        vm.prank(keeper); // anyone
+        bidBook.evict(id);
+        assertEq(usdt.balanceOf(buyer1), before + 70 * unit);
+        BidBook.Bid memory b = bidBook.getBid(id);
+        assertEq(b.amount, 30 * unit);
+        assertEq(b.reserved, 30 * unit); // still backs its loan
+        assertFalse(b.closed);
+
+        vm.prank(address(market));
+        bidBook.fill(id, 30 * unit, address(market));
+        assertTrue(bidBook.getBid(id).closed);
+        assertEq(bidBook.openBidsOf(buyer1), 0);
     }
 
     function test_openBidsStaySortedAfterClose() public {
@@ -265,8 +319,9 @@ contract BidBookTest is StandbyBase {
             uint256 amt = ((seed >> 16) % 1000 + 1) * unit / 10;
 
             if (op == 0 || n == 0) {
-                if (bidBook.openBidIds().length < 32) {
-                    _bid(step % 2 == 0 ? buyer1 : buyer2, amt, uint16((seed >> 32) % 801));
+                address who = step % 2 == 0 ? buyer1 : buyer2;
+                if (bidBook.openBidIds().length < 32 && bidBook.openBidsOf(who) < 4) {
+                    _bid(who, amt, uint16((seed >> 32) % 801));
                 }
             } else if (op == 1) {
                 BidBook.Bid memory b = bidBook.getBid(pick);

@@ -1,14 +1,26 @@
 import { standbyMarketAbi, txUrl } from '@standby/shared';
-import { BaseError, ContractFunctionRevertedError, type Address, type PublicClient } from 'viem';
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  TransactionReceiptNotFoundError,
+  WaitForTransactionReceiptTimeoutError,
+  type Address,
+  type Hash,
+  type PublicClient,
+} from 'viem';
 import type { KeeperWallet } from './chain.js';
 
 export type SettleLog = (entry: Record<string, unknown>) => void;
 
+export type SettlerStatus = {
+  pending: { loanId: string; txHash: Hash }[];
+  backingOff: { loanId: string; retryAt: string; reason: string }[];
+};
+
 export type Settler = {
-  /** One pass: settle every settleable loan. Returns the loan ids settled in this pass. */
+  /** One pass: settle every settleable loan. Returns the loan ids whose settlement landed in this pass. */
   tick(): Promise<bigint[]>;
-  /** Loans given up on after the maximum number of failed attempts. */
-  abandoned(): bigint[];
+  status(): SettlerStatus;
 };
 
 function reason(err: unknown): string {
@@ -22,29 +34,87 @@ function reason(err: unknown): string {
 
 /**
  * Polls open loans and calls `settle` on any that `isSettleable`. It holds no authority the
- * contracts do not give everyone: anyone may call `settle`. A loan whose settlement fails
- * `maxAttempts` times is left alone (and logged) so one bad loan cannot stall the loop.
+ * contracts do not give everyone: anyone may call `settle`.
+ * - A sent transaction is followed until it lands; a slow receipt never causes a second send.
+ * - After `maxAttempts` failures in a row a loan backs off for `cooldownMs`, then gets
+ *   `maxAttempts` more tries, so a pause or an RPC outage delays settlement but never ends it.
  */
 export function createSettler(opts: {
   client: PublicClient;
   wallet: KeeperWallet;
   market: Address;
   maxAttempts: number;
+  cooldownMs?: number;
+  receiptTimeoutMs?: number;
+  now?: () => number;
   log?: SettleLog;
 }): Settler {
   const { client, wallet, market, maxAttempts } = opts;
+  const cooldownMs = opts.cooldownMs ?? 5 * 60_000;
+  const receiptTimeoutMs = opts.receiptTimeoutMs ?? 60_000;
+  const now = opts.now ?? Date.now;
   const log = opts.log ?? ((e) => console.log(JSON.stringify(e)));
+
   const closed = new Set<bigint>();
-  const failures = new Map<bigint, number>();
-  const gaveUp = new Set<bigint>();
+  const pending = new Map<bigint, Hash>();
+  const failures = new Map<bigint, { count: number; retryAt: number; reason: string }>();
+
+  const fail = (id: bigint, err: unknown) => {
+    const f = failures.get(id) ?? { count: 0, retryAt: 0, reason: '' };
+    f.count += 1;
+    f.reason = reason(err);
+    if (f.count >= maxAttempts) {
+      f.count = 0;
+      f.retryAt = now() + cooldownMs;
+      log({ event: 'backing_off', loanId: id.toString(), retryAt: new Date(f.retryAt).toISOString(), reason: f.reason });
+    } else {
+      log({ event: 'settle_failed', loanId: id.toString(), attempt: f.count, reason: f.reason });
+    }
+    failures.set(id, f);
+  };
+
+  const landed = (id: bigint, hash: Hash, settled: bigint[]) => {
+    pending.delete(id);
+    failures.delete(id);
+    closed.add(id);
+    settled.push(id);
+    log({ event: 'settled', loanId: id.toString(), txHash: hash, explorer: txUrl(hash) });
+  };
+
+  /** Checks a transaction sent in an earlier pass. True if the loan needs no more work this pass. */
+  const followPending = async (id: bigint, hash: Hash, settled: bigint[]): Promise<boolean> => {
+    try {
+      const receipt = await client.getTransactionReceipt({ hash });
+      if (receipt.status === 'success') {
+        landed(id, hash, settled);
+        return true;
+      }
+      pending.delete(id);
+      fail(id, new Error(`settle reverted in ${hash}`));
+      return true;
+    } catch (err) {
+      if (err instanceof TransactionReceiptNotFoundError) return true; // still in flight
+      throw err;
+    }
+  };
 
   return {
-    abandoned: () => [...gaveUp],
+    status: () => ({
+      pending: [...pending].map(([id, txHash]) => ({ loanId: id.toString(), txHash })),
+      backingOff: [...failures]
+        .filter(([, f]) => f.retryAt > now())
+        .map(([id, f]) => ({ loanId: id.toString(), retryAt: new Date(f.retryAt).toISOString(), reason: f.reason })),
+    }),
+
     async tick() {
       const count = await client.readContract({ address: market, abi: standbyMarketAbi, functionName: 'loanCount' });
       const settled: bigint[] = [];
       for (let id = 0n; id < count; id++) {
-        if (closed.has(id) || gaveUp.has(id)) continue;
+        if (closed.has(id)) continue;
+        const hash = pending.get(id);
+        if (hash && (await followPending(id, hash, settled))) continue;
+        if ((failures.get(id)?.retryAt ?? 0) > now()) continue;
+
         const [loan] = await client.readContract({
           address: market,
           abi: standbyMarketAbi,
@@ -63,6 +133,7 @@ export function createSettler(opts: {
         });
         if (!settleable) continue;
 
+        let sent: Hash | undefined;
         try {
           const { request } = await client.simulateContract({
             address: market,
@@ -71,18 +142,18 @@ export function createSettler(opts: {
             args: [id],
             account: wallet.account,
           });
-          const hash = await wallet.writeContract(request);
-          const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
-          if (receipt.status !== 'success') throw new Error(`settle reverted in ${hash}`);
-          closed.add(id);
-          settled.push(id);
-          log({ event: 'settled', loanId: id.toString(), txHash: hash, explorer: txUrl(hash) });
+          sent = await wallet.writeContract(request);
+          pending.set(id, sent);
+          const receipt = await client.waitForTransactionReceipt({ hash: sent, timeout: receiptTimeoutMs });
+          if (receipt.status !== 'success') throw new Error(`settle reverted in ${sent}`);
+          landed(id, sent, settled);
         } catch (err) {
-          const attempts = (failures.get(id) ?? 0) + 1;
-          failures.set(id, attempts);
-          const done = attempts >= maxAttempts;
-          if (done) gaveUp.add(id);
-          log({ event: done ? 'gave_up' : 'settle_failed', loanId: id.toString(), attempts, reason: reason(err) });
+          if (sent && err instanceof WaitForTransactionReceiptTimeoutError) {
+            log({ event: 'settle_pending', loanId: id.toString(), txHash: sent });
+            continue; // followed up next pass; never re-sent while pending
+          }
+          pending.delete(id);
+          fail(id, err);
         }
       }
       return settled;

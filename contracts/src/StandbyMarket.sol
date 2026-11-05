@@ -9,7 +9,6 @@ import {AllowlistRegistry} from "./AllowlistRegistry.sol";
 import {BidBook} from "./BidBook.sol";
 import {NavOracle} from "./NavOracle.sol";
 import {RestrictedAsset} from "./RestrictedAsset.sol";
-import {Roles} from "./Roles.sol";
 
 /// @title StandbyMarket
 /// @notice USDT lending pool and loans against the restricted asset. A loan borrows at most the lower
@@ -88,6 +87,12 @@ contract StandbyMarket is ReentrancyGuard {
     /// @dev Sum of principal * openedAt over open loans, for aggregate interest accrual.
     uint256 private _principalTime;
 
+    /// @notice Shares held for an account that was not allowlisted when they were due (a revoked
+    /// borrower's collateral, a revoked buyer's fill). Collected with `claimShares` once allowed again.
+    mapping(address account => uint256) public claimableShares;
+    /// @notice Commitment fees whose transfer to the buyer failed. Collected with `claimFees`.
+    mapping(address buyer => uint256) public claimableFees;
+
     event Deposited(address indexed lender, uint256 assets, uint256 shares);
     event Withdrawn(address indexed lender, uint256 assets, uint256 shares);
     event LoanOpened(
@@ -102,6 +107,10 @@ contract StandbyMarket is ReentrancyGuard {
         uint256 indexed loanId, uint256 recovered, uint256 collateralToBuyers, uint256 collateralReturned
     );
     event Shortfall(uint256 indexed loanId, uint256 amount);
+    event SharesHeld(address indexed account, uint256 shares);
+    event SharesClaimed(address indexed account, uint256 shares);
+    event FeeHeld(address indexed buyer, uint256 amount);
+    event FeesClaimed(address indexed buyer, uint256 amount);
 
     error ZeroAddress();
     error BadConfig();
@@ -267,6 +276,7 @@ contract StandbyMarket is ReentrancyGuard {
         Loan storage l = _loan(loanId);
         if (l.state != LoanState.Open) revert LoanNotOpen();
         if (msg.sender != l.borrower) revert NotBorrower();
+        if (asset.paused()) revert AssetPaused();
 
         uint256 dueNow = _dueAt(l, block.timestamp);
         uint256 elapsed = block.timestamp - l.openedAt;
@@ -289,20 +299,24 @@ contract StandbyMarket is ReentrancyGuard {
         usdt.safeTransferFrom(msg.sender, address(this), dueNow + fees);
         for (uint256 i; i < n; ++i) {
             bidBook.release(rs[i].bidId, rs[i].amount);
-            if (feeOf[i] > 0) usdt.safeTransfer(buyers[i], feeOf[i]);
+            // A buyer the token refuses (e.g. blacklisted) must not block repayment: hold the fee.
+            if (feeOf[i] > 0 && !usdt.trySafeTransfer(buyers[i], feeOf[i])) {
+                claimableFees[buyers[i]] += feeOf[i];
+                emit FeeHeld(buyers[i], feeOf[i]);
+            }
         }
-        IERC20(address(asset)).safeTransfer(l.borrower, l.collateral);
+        _deliver(l.borrower, l.collateral);
     }
 
-    /// @notice True when the loan is open and past maturity plus grace, or (with fresh NAV) its debt
-    /// exceeds the liquidation threshold of its collateral value.
+    /// @notice True when the loan is open, the NAV is fresh (fills are priced from it), and either the
+    /// loan is past maturity plus grace or its debt exceeds the liquidation threshold of its collateral value.
     function isSettleable(uint256 loanId) public view returns (bool) {
         if (loanId >= _loans.length) return false;
         Loan storage l = _loans[loanId];
         if (l.state != LoanState.Open) return false;
-        if (block.timestamp > uint256(l.maturity) + _grace) return true;
         (uint256 nav, uint40 updatedAt) = oracle.latest();
         if (!_fresh(updatedAt)) return false;
+        if (block.timestamp > uint256(l.maturity) + _grace) return true;
         return _dueAt(l, block.timestamp) * BPS > _value(l.collateral, nav) * _liqThresholdBps;
     }
 
@@ -311,6 +325,7 @@ contract StandbyMarket is ReentrancyGuard {
     /// collateral returns to the borrower. Anyone may call it.
     function settle(uint256 loanId) external nonReentrant {
         if (!isSettleable(loanId)) revert NotSettleable();
+        if (asset.paused()) revert AssetPaused();
         Loan storage l = _loans[loanId];
         Reservation[] storage rs = _reservations[loanId];
 
@@ -323,18 +338,35 @@ contract StandbyMarket is ReentrancyGuard {
         if (remaining > 0) emit Shortfall(loanId, remaining);
         emit LoanSettled(loanId, recovered, toBuyers, collateralLeft);
 
-        IERC20 share = IERC20(address(asset));
         for (uint256 i; i < fills.length; ++i) {
             uint256 bidId = rs[i].bidId;
             Fill memory f = fills[i];
             if (f.take > 0) {
                 bidBook.fill(bidId, f.take, address(this));
-                share.safeTransfer(f.buyer, f.shares);
+                _deliver(f.buyer, f.shares);
             }
             uint256 unused = rs[i].amount - f.take;
             if (unused > 0) bidBook.release(bidId, unused);
         }
-        if (collateralLeft > 0) share.safeTransfer(l.borrower, collateralLeft);
+        if (collateralLeft > 0) _deliver(l.borrower, collateralLeft);
+    }
+
+    /// @notice Collects shares held for the caller. Reverts (NotAllowed) while still off the allowlist.
+    function claimShares() external nonReentrant {
+        uint256 shares = claimableShares[msg.sender];
+        if (shares == 0) revert ZeroAmount();
+        claimableShares[msg.sender] = 0;
+        emit SharesClaimed(msg.sender, shares);
+        IERC20(address(asset)).safeTransfer(msg.sender, shares);
+    }
+
+    /// @notice Collects commitment fees held for the caller.
+    function claimFees() external nonReentrant {
+        uint256 amount = claimableFees[msg.sender];
+        if (amount == 0) revert ZeroAmount();
+        claimableFees[msg.sender] = 0;
+        emit FeesClaimed(msg.sender, amount);
+        usdt.safeTransfer(msg.sender, amount);
     }
 
     // ---------------------------------------------------------------- views
@@ -414,13 +446,25 @@ contract StandbyMarket is ReentrancyGuard {
         return reserved * _commitFeeBps * elapsed / (BPS * YEAR);
     }
 
+    /// @dev Sends shares to an allowlisted account, or holds them as a claim for one that is not, so an
+    /// allowlist change can never block repayment or settlement. A pause still blocks both.
+    function _deliver(address to, uint256 shares) private {
+        if (_registry.isAllowed(to)) {
+            IERC20(address(asset)).safeTransfer(to, shares);
+        } else {
+            claimableShares[to] += shares;
+            emit SharesHeld(to, shares);
+        }
+    }
+
     function _closePrincipal(Loan storage l) private {
         totalPrincipal -= l.principal;
         _principalTime -= l.principal * l.openedAt;
     }
 
     /// @dev Works out every fill before any state changes, so settle can follow
-    /// checks-effects-interactions. A bid whose buyer no longer holds BUYER is skipped.
+    /// checks-effects-interactions. Every reservation is filled, including a revoked buyer's: their
+    /// committed USDT still repays the pool and their shares are held for them (see `_deliver`).
     function _planSettlement(Loan storage l, Reservation[] storage rs)
         private
         view
@@ -436,7 +480,6 @@ contract StandbyMarket is ReentrancyGuard {
             BidBook.Bid memory b = bidBook.getBid(rs[i].bidId);
             fills[i].buyer = b.buyer;
             if (remaining == 0 || collateralLeft == 0) continue;
-            if (!_registry.hasRole(b.buyer, Roles.BUYER)) continue;
 
             uint256 price = nav * (BPS - b.discountBps) / BPS;
             if (price == 0) continue;

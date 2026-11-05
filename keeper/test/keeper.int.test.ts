@@ -83,15 +83,31 @@ describe.skipIf(!hasToolchain())('keeper against a local anvil deployment', () =
     expect(names).toContain('Filled');
   });
 
-  it('gives up on a loan after three failed settlements', async () => {
+  it('backs off after three failed settlements, then settles once the cause clears', async () => {
     await h.write('issuer', h.addresses.oracle, (await import('@standby/shared')).navOracleAbi as Abi, 'setNav', [1_020_000n]);
     await h.write('borrower', h.addresses.market, standbyMarketAbi as Abi, 'openLoan', [10n * SHARE, 5n * USDT]);
     await h.increaseTime(900 + 120 + 5);
     await h.write('issuer', h.addresses.asset, restrictedAssetAbi as Abi, 'pause', []); // settle now reverts
-    const s = settler();
-    for (let i = 0; i < 4; i++) await s.tick();
-    expect(s.abandoned()).toEqual([1n]);
+    let t = 1_000_000;
+    const s = createSettler({
+      client: h.client,
+      wallet: createWalletClient({ account: privateKeyToAccount(h.keeperKey), chain: whitechainSepolia, transport: http(h.rpcUrl) }),
+      market: h.addresses.market,
+      maxAttempts: 3,
+      cooldownMs: 60_000,
+      now: () => t,
+      log: (e) => logs.push(e),
+    });
+    for (let i = 0; i < 4; i++) await s.tick(); // fourth pass is inside the cooldown: no attempt
     expect(logs.filter((l) => l.loanId === '1' && l.event === 'settle_failed')).toHaveLength(2);
-    expect(logs.find((l) => l.loanId === '1' && l.event === 'gave_up')).toBeTruthy();
+    expect(logs.filter((l) => l.loanId === '1' && l.event === 'backing_off')).toHaveLength(1);
+    expect(s.status().backingOff.map((b) => b.loanId)).toEqual(['1']);
+    expect(String(s.status().backingOff[0]?.reason)).toContain('AssetPaused');
+
+    await h.write('issuer', h.addresses.asset, restrictedAssetAbi as Abi, 'unpause', []);
+    expect(await s.tick()).toEqual([]); // still cooling down
+    t += 60_001;
+    expect(await s.tick()).toEqual([1n]);
+    expect(s.status()).toEqual({ pending: [], backingOff: [] });
   });
 });

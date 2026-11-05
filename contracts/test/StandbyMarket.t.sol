@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BidBook} from "../src/BidBook.sol";
+import {RestrictedAsset} from "../src/RestrictedAsset.sol";
 import {Roles} from "../src/Roles.sol";
 import {StandbyMarket} from "../src/StandbyMarket.sol";
 import {StandbyBase} from "./Base.t.sol";
@@ -286,19 +287,60 @@ abstract contract StandbyMarketTest is StandbyBase {
         _assertEmitted(keccak256("Shortfall(uint256,uint256)"));
     }
 
-    function test_settleSkipsRevokedBuyer() public {
+    function test_revokedBuyerStillPaysAndSharesAreHeld() public {
         _seedDemo();
-        uint256 id = _open(1000 * SHARES, 400 * unit); // needs ~445, fits in the 3% bid alone
+        uint256 id = _open(1000 * SHARES, 400 * unit); // needs ~445, all from the 3% bid
         vm.prank(issuer);
         registry.setRoles(buyer1, 0);
         vm.warp(block.timestamp + TERM + GRACE + 1);
+        uint256 dueNow = market.due(id);
+        uint256 cashBefore = market.cash();
+
         market.settle(id);
-        assertEq(asset.balanceOf(buyer1), 0);
-        assertEq(bidBook.getBid(0).reserved, 0);
-        assertEq(bidBook.getBid(0).amount, 600 * unit);
-        // Buyer 2 held no reservation for this loan, so the whole debt is a shortfall and the
-        // collateral goes back to the borrower.
-        assertEq(asset.balanceOf(borrower), 1000 * SHARES);
+        uint256 price = _nav102() * 9700 / 10_000;
+        uint256 shares = (dueNow * 1e18 + price - 1) / price;
+        assertEq(market.cash(), cashBefore + dueNow); // the commitment still repays the pool
+        assertEq(asset.balanceOf(buyer1), 0); // never sent off the allowlist
+        assertEq(market.claimableShares(buyer1), shares);
+        assertEq(asset.balanceOf(borrower), 1000 * SHARES - shares); // no windfall
+        assertEq(bidBook.getBid(0).amount, 600 * unit - dueNow);
+
+        vm.expectRevert(RestrictedAsset.NotAllowed.selector);
+        vm.prank(buyer1);
+        market.claimShares();
+        vm.prank(issuer);
+        registry.setRoles(buyer1, Roles.BUYER);
+        vm.prank(buyer1);
+        market.claimShares();
+        assertEq(asset.balanceOf(buyer1), shares);
+        assertEq(market.claimableShares(buyer1), 0);
+    }
+
+    function test_revokedBorrowerCanStillRepayAndCollateralIsHeld() public {
+        _seedDemo();
+        uint256 id = _open(1000 * SHARES, 400 * unit);
+        vm.prank(issuer);
+        registry.setRoles(borrower, 0);
+        vm.prank(borrower);
+        market.repay(id);
+        assertEq(bidBook.getBid(0).reserved, 0); // reservations released
+        assertEq(market.claimableShares(borrower), 1000 * SHARES);
+
+        uint256 id2 = _openAfterRestore();
+        vm.prank(issuer);
+        registry.setRoles(borrower, 0);
+        vm.warp(block.timestamp + TERM + GRACE + 1);
+        market.settle(id2); // not blocked by the revoked borrower
+        assertEq(market.claimableShares(borrower), 1000 * SHARES - asset.balanceOf(buyer1));
+        assertEq(asset.balanceOf(borrower), 0);
+    }
+
+    function _openAfterRestore() internal returns (uint256) {
+        vm.prank(issuer);
+        registry.setRoles(borrower, Roles.HOLDER);
+        vm.prank(borrower);
+        market.claimShares();
+        return _open(1000 * SHARES, 400 * unit);
     }
 
     function test_navDropMakesLoanSettleableEarly() public {
@@ -314,13 +356,17 @@ abstract contract StandbyMarketTest is StandbyBase {
         assertEq(uint8(l.state), uint8(StandbyMarket.LoanState.Settled));
     }
 
-    function test_staleNavDoesNotTriggerEarlyDefault() public {
+    function test_settlementWaitsForFreshNav() public {
         _seedDemo();
         uint256 id = _open(1000 * SHARES, 867 * unit);
+        vm.warp(block.timestamp + MAX_NAV_AGE + 1); // long past due, but NAV is stale
+        assertFalse(market.isSettleable(id));
+        vm.expectRevert(StandbyMarket.NotSettleable.selector);
+        market.settle(id);
         vm.prank(issuer);
-        oracle.setNav(96 * unit / 100);
-        vm.warp(block.timestamp + MAX_NAV_AGE + 1); // NAV now stale, and the loan is long past due
-        assertTrue(market.isSettleable(id)); // maturity trigger still applies
+        oracle.setNav(_nav102());
+        assertTrue(market.isSettleable(id));
+        market.settle(id);
     }
 
     function test_staleNavAloneIsNotEnoughBeforeMaturity() public {

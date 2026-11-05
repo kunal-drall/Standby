@@ -34,6 +34,7 @@ const schema = z.object({
   POLL_INTERVAL_MS: z.coerce.number().int().min(1000).default(15_000),
   RPC_TIMEOUT_MS: z.coerce.number().int().min(500).default(10_000),
   MAX_SETTLE_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  SETTLE_COOLDOWN_MS: z.coerce.number().int().min(1000).default(300_000),
 });
 
 export type Config = z.infer<typeof schema>;

@@ -26,6 +26,10 @@ contract BidBook is ReentrancyGuard {
     }
 
     uint256 public constant MAX_OPEN_BIDS = 32;
+    /// @notice Open bids one buyer may hold, so one buyer cannot fill the book.
+    uint256 public constant MAX_BIDS_PER_BUYER = 4;
+    /// @notice Longest notice a bid may carry.
+    uint40 public constant MAX_NOTICE = 30 days;
 
     IERC20 public immutable usdt;
     AllowlistRegistry public immutable registry;
@@ -38,6 +42,7 @@ contract BidBook is ReentrancyGuard {
     Bid[] private _bids;
     /// @dev Open bid ids, cheapest discount first, ties by id (oldest first).
     uint256[] private _open;
+    mapping(address buyer => uint256) public openBidsOf;
 
     event MarketSet(address market);
     event BidPosted(
@@ -48,6 +53,7 @@ contract BidBook is ReentrancyGuard {
     event Reserved(uint256 indexed bidId, uint256 indexed loanId, uint256 amount);
     event Released(uint256 indexed bidId, uint256 amount);
     event Filled(uint256 indexed bidId, uint256 usdtAmount);
+    event Evicted(uint256 indexed bidId, uint256 refunded);
 
     error NotBuyer();
     error NotBidOwner();
@@ -67,6 +73,8 @@ contract BidBook is ReentrancyGuard {
     error NoticeTooShort();
     error TooManyBids();
     error InsufficientCapacity();
+    error NoticeTooLong();
+    error StillBuyer();
 
     modifier onlyMarket() {
         if (msg.sender != market) revert NotMarket();
@@ -104,7 +112,10 @@ contract BidBook is ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (discountBps > maxDiscountBps) revert DiscountTooHigh();
         if (notice < minNotice) revert NoticeTooShort();
-        if (_open.length >= MAX_OPEN_BIDS) revert TooManyBids();
+        if (notice > MAX_NOTICE) revert NoticeTooLong();
+        if (_open.length >= MAX_OPEN_BIDS || openBidsOf[msg.sender] >= MAX_BIDS_PER_BUYER) {
+            revert TooManyBids();
+        }
 
         bidId = _bids.length;
         _bids.push(
@@ -119,6 +130,7 @@ contract BidBook is ReentrancyGuard {
             })
         );
         _insertOpen(bidId, discountBps);
+        openBidsOf[msg.sender] += 1;
         emit BidPosted(bidId, msg.sender, amount, discountBps, notice);
 
         usdt.safeTransferFrom(msg.sender, address(this), amount);
@@ -150,6 +162,22 @@ contract BidBook is ReentrancyGuard {
         emit BidWithdrawn(bidId, amount);
 
         usdt.safeTransfer(msg.sender, amount);
+    }
+
+    /// @notice Anyone may refund the unreserved USDT of a bid whose buyer lost the BUYER role, freeing
+    /// its slot. The reserved part stays and still backs its loans.
+    function evict(uint256 bidId) external nonReentrant {
+        Bid storage b = _bid(bidId);
+        if (b.closed) revert BidClosed();
+        if (registry.hasRole(b.buyer, Roles.BUYER)) revert StillBuyer();
+        uint256 refund = b.amount - b.reserved;
+        if (refund == 0) revert ZeroAmount();
+
+        b.amount -= refund;
+        if (b.amount == 0) _close(bidId, b);
+        emit Evicted(bidId, refund);
+
+        usdt.safeTransfer(b.buyer, refund);
     }
 
     // ---------------------------------------------------------------- market
@@ -267,6 +295,7 @@ contract BidBook is ReentrancyGuard {
 
     function _close(uint256 bidId, Bid storage b) private {
         b.closed = true;
+        openBidsOf[b.buyer] -= 1;
         uint256 n = _open.length;
         for (uint256 i; i < n; ++i) {
             if (_open[i] == bidId) {

@@ -1,8 +1,10 @@
-# Standby interfaces v1.1 (frozen)
+# Standby interfaces v1.2 (frozen)
 
 The only spec the code is built from. Change it only by team agreement: bump the version line, note it in `docs/plan.md` (Decision log), and tell every session to restart its context.
 
 v1.1 (2026-11-06): closes the gaps found while scaffolding. `BidBook.reserve` takes the `loanId` its `Reserved` event already carried; read-only views added for the UI and keeper; custom errors named; settlement skips a buyer the issuer has since removed from the allowlist. All additions are listed in section 5a.
+
+v1.2 (2026-11-06): fixes from the independent review. Shares owed to an account that is off the allowlist are held as a claim instead of blocking settlement or repayment, a revoked buyer's reservation is still filled, settlement needs a fresh NAV, the bid book limits open bids per buyer and notice length and lets anyone evict a revoked buyer's unreserved USDT, and a commitment fee the token refuses to deliver is held as a claim. See section 5a.
 
 ## 1. Constants (verified 5 Nov 2026)
 
@@ -198,14 +200,33 @@ function convertToAssets(uint256 shares) external view returns (uint256);
 function quoteRepay(uint256 loanId) external view returns (uint256 dueNow, uint256 fees); // repay pulls dueNow + fees
 error ZeroAmount(); error ZeroShares(); error AssetPaused(); error LoanNotOpen(); error NotBorrower(); error NotSettleable();
 error StaleNav(); error AboveLtv(); error InsufficientCash();
+
+// v1.2: claims (StandbyMarket)
+function claimableShares(address account) external view returns (uint256);
+function claimableFees(address buyer) external view returns (uint256);
+function claimShares() external;   // reverts NotAllowed (asset) while the caller is off the allowlist
+function claimFees() external;
+event SharesHeld(address indexed account, uint256 shares);
+event SharesClaimed(address indexed account, uint256 shares);
+event FeeHeld(address indexed buyer, uint256 amount);
+event FeesClaimed(address indexed buyer, uint256 amount);
+
+// v1.2: BidBook limits and eviction
+uint256 constant MAX_BIDS_PER_BUYER = 4; uint40 constant MAX_NOTICE = 30 days;
+function openBidsOf(address buyer) external view returns (uint256);
+function evict(uint256 bidId) external; // anyone; buyer lacks BUYER; refunds the unreserved part to the buyer
+event Evicted(uint256 indexed bidId, uint256 refunded);
+error NoticeTooLong(); error StillBuyer();
 ```
 
 Rules added in v1.1:
 - A bid closes when its `amount` reaches 0 (fully withdrawn or filled); a closed bid leaves `openBidIds`.
 - Pool shares: `shares = assets * (totalShares + 1) / (totalAssets + 1)` on deposit, `assets = shares * (totalAssets + 1) / (totalShares + 1)` on withdraw, both rounded down. `cash` is tracked internally, so a direct USDT transfer to the market does not change the share price.
 - `totalAssets` accrues interest over all open loans from aggregate sums (`totalPrincipal` and the principal-weighted open time), so it can differ from the sum of `due` by a few base units of rounding.
-- The NAV-based trigger in `isSettleable` (P1) requires fresh NAV; the maturity trigger does not.
-- `settle` skips a reserved bid whose buyer is no longer allowlisted (its whole reservation is released), so one revoked buyer cannot block settlement.
+- `isSettleable` requires a fresh NAV for both triggers (v1.2): fills are priced from NAV, so a stale NAV waits for the issuer's next post instead of forcing buyers to pay an old price. `repay` and `settle` revert `AssetPaused` while the asset is paused.
+- `settle` fills every reservation (v1.2). Shares for a buyer, and leftover collateral for a borrower, who is off the allowlist at that moment are held in the market as `claimableShares` and collected with `claimShares` once allowed again, so an allowlist change can never block settlement or repayment and shares never reach a non-allowlisted wallet. New loans count only bids whose buyer holds BUYER.
+- A commitment fee whose USDT transfer to the buyer fails is held as `claimableFees` (v1.2), so one buyer cannot block repayment.
+- Bid book (v1.2): at most 4 open bids per buyer and 32 in total; notice at most 30 days; `evict` frees a revoked buyer's slot.
 - `repay` may be called by the borrower at any time while the loan is open, including after maturity plus grace, until someone settles it.
 
 ## 6. Read API (P1, served by the keeper process, Hono, JSON)

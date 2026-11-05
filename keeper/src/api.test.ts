@@ -24,7 +24,7 @@ describe('read API', () => {
   it('serves health', async () => {
     const res = await createApi(stub()).request('/api/health');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, block: '123', navAgeSeconds: 90 });
+    expect(await res.json()).toEqual({ ok: true, block: '123', navAgeSeconds: 90, keeper: null });
   });
 
   it('serves capacity, bids and loans with decimals at the top level', async () => {
@@ -55,6 +55,33 @@ describe('read API', () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ ok: false, error: 'timeout' });
     expect((await createApi(null).request('/api/loans')).status).toBe(503);
+  });
+
+  it('caches responses briefly and never caches failures', async () => {
+    let calls = 0;
+    let t = 0;
+    const api = createApi(stub({ bids: async () => ({ decimals: 6, bids: [{ n: ++calls }] as never }) }), {
+      now: () => t,
+    });
+    await api.request('/api/bids');
+    await api.request('/api/bids');
+    expect(calls).toBe(1);
+    t = 2_001;
+    await api.request('/api/bids');
+    expect(calls).toBe(2);
+
+    let attempts = 0;
+    const flaky = createApi(
+      stub({
+        loans: async () => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('rpc down');
+          return { decimals: 6, loans: [] };
+        },
+      }),
+    );
+    expect((await flaky.request('/api/loans')).status).toBe(503);
+    expect((await flaky.request('/api/loans')).status).toBe(200);
   });
 
   it('answers 404 as JSON', async () => {
