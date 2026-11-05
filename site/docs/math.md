@@ -65,16 +65,14 @@ Each fee goes to that bid's buyer.
 
 ## Worked example
 
-Demo parameters: `maxLtvBps` 8500, `haircutBps` 1000, `rateBps` 800, `loanTerm` 900 s, `grace` 120 s.
-
-Inputs:
+Demo parameters: `maxLtvBps` 8500, `haircutBps` 1000, `rateBps` 800, `loanTerm` 900 s, `grace` 120 s. Inputs are the demo seed script's:
 
 - NAV is 1.02 USDT. With 6 decimals that is `1_020_000`.
-- The borrower pledges 1,000 shares, which is `1000e18`.
-- Two bids: one at a 3% discount and one at a 5% discount.
-- **Assumption:** each bid holds 500 USDT (`500_000_000`) and neither is in exit. The repository does not fix bid sizes; these are chosen for the example.
+- The borrower holds 1,000 shares, which is `1000e18`, and pledges all of them.
+- Buyer 1 bids 600 USDT at a 3% discount. Buyer 2 bids 500 USDT at a 5% discount. Both use a 600 s notice and neither is in exit.
+- The lender deposits 1,500 USDT in the pool.
 
-The year is 365 days = 31,536,000 seconds. Amounts below are in base units, with the USDT value in brackets.
+The year is 365 days = 31,536,000 seconds. Amounts are in base units, with the USDT value in brackets.
 
 ### 1. Price limit
 
@@ -85,26 +83,24 @@ priceLimit = 1_020_000_000 * 8500 / 10_000 = 867_000_000      (867.000000 USDT)
 
 ### 2. Capacity limit
 
-Free capacity is 500 + 500 = `1_000_000_000`. Both bids unlock after the loan ends, so both count.
-
-The loan ends 900 + 120 = 1,020 seconds after opening. The largest principal whose `needed` fits is found as follows.
+Free capacity is 600 + 500 = `1_100_000_000`. Both bids unlock after the loan ends, so both count. The loan ends 900 + 120 = 1,020 seconds after opening.
 
 ```
-maxDue = 1_000_000_000 * (10_000 - 1000) / 10_000 = 900_000_000
+maxDue = 1_100_000_000 * (10_000 - 1000) / 10_000 = 990_000_000
 d      = 10_000 * 31_536_000 = 315_360_000_000
 k      = 800 * 1020 = 816_000
-p      = maxDue * d / (d + k) = 899_997_672                    (899.997672 USDT)
+p      = maxDue * d / (d + k) = 989_997_438
 ```
 
-The contract then checks whether `p + 1` still fits. It does not, so `capacityLimit` is 899,997,672.
+The contract then checks whether `p + 1` still fits: `dueAt(end)` for 989,997,439 is 990,000,000 or less, so it does. The capacity limit is **989,997,439** (989.997439 USDT).
 
 ### 3. Maximum borrow
 
 ```
-maxBorrow = min(867_000_000, 899_997_672) = 867_000_000        (867.000000 USDT)
+maxBorrow = min(867_000_000, 989_997_439) = 867_000_000        (867.000000 USDT)
 ```
 
-The price limit is lower, so it binds here. With smaller bids, capacity would bind. For example, free capacity of 600 USDT gives `maxDue = 540_000_000` and a capacity limit of 539,998,603 (539.998603 USDT).
+The price limit is lower, so it binds. This matches `previewLimits(1000e18)` on the demo deployment. Capacity would bind if the bids were smaller.
 
 ### 4. Open a loan for 867 USDT
 
@@ -116,20 +112,20 @@ needed                   = ceil( 867_002_243 * 10_000 / 9000 )
                          = ceil( 963_335_825.56 ) = 963_335_826      (963.335826 USDT)
 ```
 
-Reservations, lowest discount first:
+Reservations, lowest discount first. The 3% bid is used up first and the 5% bid supplies the rest:
 
 | Bid | Discount | Reserved |
 | --- | --- | --- |
-| A | 3% | 500_000_000 (all of it) |
-| B | 5% | 463_335_826 |
+| Buyer 1 | 3% | 600_000_000 (all of it) |
+| Buyer 2 | 5% | 363_335_826 |
 
 ### 5a. Repay at 600 seconds
 
 ```
 interest = 867_000_000 * 800 * 600 / 315_360_000_000 = 1319     (rounded down)
 due      = 867_001_319
-fee_A    = 500_000_000 * 200 * 600 / 315_360_000_000 = 190
-fee_B    = 463_335_826 * 200 * 600 / 315_360_000_000 = 176
+fee_1    = 600_000_000 * 200 * 600 / 315_360_000_000 = 228
+fee_2    = 363_335_826 * 200 * 600 / 315_360_000_000 = 138
 ```
 
 The borrower pays 867,001,319 to the pool plus 366 in fees to the two buyers. The reservations are released and the 1,000 shares return.
@@ -139,25 +135,25 @@ The borrower pays 867,001,319 to the pool plus 366 in fees to the two buyers. Th
 NAV is unchanged at 1.02.
 
 ```
-interest = 867_000_000 * 800 * 1021 / 315_360_000_000 = 708_165_600_000_000 / 315_360_000_000 = 2245
+interest  = 867_000_000 * 800 * 1021 / 315_360_000_000 = 708_165_600_000_000 / 315_360_000_000 = 2245
 remaining = 867_002_245
 ```
 
-Bid A, 3% discount:
+Buyer 1, 3% discount:
 
 ```
 price  = 1_020_000 * (10_000 - 300) / 10_000 = 989_400
-take   = min(500_000_000, 867_002_245) = 500_000_000
-shares = ceil( 500_000_000 * 1e18 / 989_400 ) = 505.356781888012937134e18
-remaining = 867_002_245 - 500_000_000 = 367_002_245
+take   = min(600_000_000, 867_002_245) = 600_000_000
+shares = ceil( 600_000_000 * 1e18 / 989_400 ) = 606.428138265615524561e18
+remaining = 867_002_245 - 600_000_000 = 267_002_245
 ```
 
-Bid B, 5% discount:
+Buyer 2, 5% discount:
 
 ```
 price  = 1_020_000 * (10_000 - 500) / 10_000 = 969_000
-take   = min(463_335_826, 367_002_245) = 367_002_245
-shares = ceil( 367_002_245 * 1e18 / 969_000 ) = 378.743286893704850362e18
+take   = min(363_335_826, 267_002_245) = 267_002_245
+shares = ceil( 267_002_245 * 1e18 / 969_000 ) = 275.544112487100103200e18
 remaining = 0
 ```
 
@@ -166,12 +162,12 @@ Result:
 | Item | Amount |
 | --- | --- |
 | Recovered by the pool | 867.002245 USDT (the full debt, no `Shortfall`) |
-| Shares to buyer A | 505.356781888012937134 |
-| Shares to buyer B | 378.743286893704850362 |
-| Shares returned to the borrower | 1000 - 884.100068781717787496 = 115.899931218282212504 |
-| Bid B reservation released | 463_335_826 - 367_002_245 = 96_333_581 (96.333581 USDT) |
+| Shares to buyer 1 | 606.428138265615524561 |
+| Shares to buyer 2 | 275.544112487100103200 |
+| Shares returned to the borrower | 1000 - 881.972250752715627761 = 118.027749247284372239 |
+| Buyer 2 reservation released | 363_335_826 - 267_002_245 = 96_333_581 (96.333581 USDT) |
 
-Bid A is fully used and closes.
+Buyer 1's bid is fully used and closes.
 
 ### The early trigger
 
